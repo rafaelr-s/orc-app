@@ -59,7 +59,6 @@ def init_db():
 def salvar_orcamento(cliente, vendedor, itens_confeccionados, itens_bobinas, observacao):
     conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
-
     cur.execute("""
         INSERT INTO orcamentos (data_hora, cliente_nome, cliente_cnpj, tipo_cliente, estado, frete, tipo_pedido, vendedor_nome, vendedor_tel, vendedor_email, observacao)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -121,7 +120,7 @@ def _format_brl(v):
     return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 # ============================
-# Função para gerar PDF (retorna bytes)
+# Função para gerar PDF
 # ============================
 def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_conf, resumo_bob, observacao, preco_m2, tipo_cliente="", estado=""):
     pdf = FPDF()
@@ -238,7 +237,6 @@ def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_con
         pdf.multi_cell(largura_util, 8, vendedor_txt)
         pdf.ln(5)
 
-    # Retorna bytes do PDF
     pdf_bytes = pdf.output(dest='S').encode('latin1')
     return pdf_bytes
 
@@ -619,23 +617,19 @@ if st.button("📄 Gerar PDF e Salvar Orçamento"):
 # Histórico de Orçamentos (adicionado sem alterar funções originais)
 # ============================
 if menu == "Histórico de Orçamentos":
-    st.subheader("📋 Histórico de Orçamentos")
-
+    st.subheader("📋 Histórico de Orçamentos Salvos")
     orcamentos = buscar_orcamentos()
     if not orcamentos:
         st.info("Nenhum orçamento encontrado.")
     else:
-        for o in orcamentos:
+        for idx, o in enumerate(orcamentos):
             orc_id, data_hora, cliente_nome, vendedor_nome = o
             pdf_path = f"orcamento_{orc_id}.pdf"
-
-            # Expander colorido e com ícones
-            with st.expander(f"📝 Orçamento ID {orc_id} - {cliente_nome}"):
+            with st.expander(f"📝 Orçamento ID {orc_id} - {cliente_nome}", expanded=False):
                 st.markdown(f"**📅 Data:** {data_hora}")
                 st.markdown(f"**👤 Cliente:** {cliente_nome}")
                 st.markdown(f"**🗣️ Vendedor:** {vendedor_nome}")
 
-                # Carregar itens do orçamento para exibição visual
                 orc, confecc, bob = carregar_orcamento_por_id(orc_id)
                 if confecc:
                     st.markdown("### ⬛ Itens Confeccionados")
@@ -651,27 +645,42 @@ if menu == "Histórico de Orçamentos":
                             f"- **{item[0]}**: {item[3]}x {item[1]:.2f}m | Largura: {item[2]:.2f}m{esp} | Cor: {item[4]}"
                         )
 
-                # Botões em colunas
-                col1, col2 = st.columns([1,1])
+                col1, col2, col3 = st.columns([1,1,1])
                 with col1:
-                    if st.button(f"🔄 Reabrir", key=f"reabrir_{orc_id}"):
+                    if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}_{idx}"):
                         st.session_state["itens_confeccionados"] = [
-                            {"produto": c[0],"comprimento": c[1],"largura": c[2],"quantidade": c[3],"cor": c[4]}
-                            for c in confecc
+                            {"produto": c[0],"comprimento": c[1],"largura": c[2],
+                             "quantidade": c[3],"cor": c[4]} for c in confecc
                         ]
                         st.session_state["bobinas_adicionadas"] = [
-                            {"produto": b[0],"comprimento": b[1],"largura": b[2],"quantidade": b[3],
-                             "cor": b[4],"espessura": b[5],"preco_unitario": b[6]} for b in bob
+                            {"produto": b[0],"comprimento": b[1],"largura": b[2],
+                             "quantidade": b[3],"cor": b[4],"espessura": b[5],
+                             "preco_unitario": b[6]} for b in bob
                         ]
+                        st.success(f"Orçamento {orc_id} carregado para edição.")
                         st.rerun()
                 with col2:
                     if os.path.exists(pdf_path):
                         with open(pdf_path, "rb") as f:
                             st.download_button(
-                                f"⬇️ Baixar PDF",
-                                f,
+                                "⬇️ Baixar PDF",
+                                data=f,
                                 file_name=pdf_path,
-                                mime="application/pdf"
+                                mime="application/pdf",
+                                key=f"download_{orc_id}_{idx}"
                             )
                     else:
                         st.warning("PDF ainda não gerado.")
+                with col3:
+                    if st.button("🗑️ Excluir Orçamento", key=f"excluir_{orc_id}_{idx}"):
+                        conn = sqlite3.connect("orcamentos.db")
+                        cur = conn.cursor()
+                        cur.execute("DELETE FROM orcamentos WHERE id=?", (orc_id,))
+                        cur.execute("DELETE FROM itens_confeccionados WHERE orcamento_id=?", (orc_id,))
+                        cur.execute("DELETE FROM itens_bobinas WHERE orcamento_id=?", (orc_id,))
+                        conn.commit()
+                        conn.close()
+                        if os.path.exists(pdf_path):
+                            os.remove(pdf_path)
+                        st.success(f"Orçamento {orc_id} excluído com sucesso.")
+                        st.rerun()
