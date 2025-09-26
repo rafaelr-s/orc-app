@@ -481,56 +481,55 @@ if menu == "Novo Orçamento":
             espessura_bobina = st.number_input("Espessura da Bobina (mm):", min_value=0.010, value=0.10, step=0.010, key="esp_bob")
 
         if st.button("➕ Adicionar Bobina", key="add_bob"):
-            item_bobina = {
+                        item_bobina = {
                 'produto': produto,
                 'comprimento': float(comprimento),
                 'largura': float(largura_bobina),
                 'quantidade': int(quantidade),
-                'cor': ""
+                'cor': "",
+                'espessura': float(espessura_bobina) if espessura_bobina is not None else None,
+                'preco_unitario': preco_m2
             }
-            if espessura_bobina is not None:
-                item_bobina['espessura'] = float(espessura_bobina)
-                item_bobina['preco_unitario'] = preco_m2
             st.session_state['bobinas_adicionadas'].append(item_bobina)
+            st.rerun()
 
         if st.session_state['bobinas_adicionadas']:
             st.subheader("📋 Bobinas Adicionadas")
-            for idx, item in enumerate(st.session_state['bobinas_adicionadas'][:] ):
-                col1, col2, col3, col4 = st.columns([4,2,2,1])
+            for idx, item in enumerate(st.session_state['bobinas_adicionadas'][:]):
+                metros_item = item['comprimento'] * item['quantidade']
+                preco_item = item.get('preco_unitario') if item.get('preco_unitario') is not None else preco_m2
+                valor_item = metros_item * preco_item
+
+                col1, col2, col3 = st.columns([4, 3, 1])
                 with col1:
-                    metros_item = item['comprimento'] * item['quantidade']
-                    valor_item = metros_item * (item.get('preco_unitario') if item.get('preco_unitario') is not None else preco_m2)
-                    detalhes = (
-                        f"🔹 {item['quantidade']}x {item['comprimento']:.2f}m | Largura: {item['largura']:.2f}m "
-                        f"= {metros_item:.2f} m → {_format_brl(valor_item)}"
-                    )
-                    if 'espessura' in item and item.get('espessura') is not None:
-                        detalhes += f" | Esp: {item['espessura']:.2f}mm"
-                        detalhes += f" | unit: {_format_brl(item.get('preco_unitario', preco_m2))}"
                     st.markdown(f"**{item['produto']}**")
-                    st.markdown(detalhes)
+                    st.markdown(
+                        f"🔹 {item['quantidade']}x {item['comprimento']:.2f} m "
+                        f"→ {metros_item:.2f} m | {_format_brl(valor_item)}"
+                    )
                 with col2:
                     cor = st.text_input("Cor:", value=item['cor'], key=f"cor_bob_{idx}")
                     st.session_state['bobinas_adicionadas'][idx]['cor'] = cor
-                with col4:
+                with col3:
                     remover = st.button("❌", key=f"remover_bob_{idx}")
                     if remover:
                         st.session_state['bobinas_adicionadas'].pop(idx)
                         st.rerun()
 
-            m_total, valor_bruto_bob, valor_ipi_bob, valor_final_bob = calcular_valores_bobinas(
+        if st.session_state['bobinas_adicionadas']:
+            m_total, valor_bruto, valor_ipi, valor_final = calcular_valores_bobinas(
                 st.session_state['bobinas_adicionadas'], preco_m2, tipo_pedido
             )
             st.markdown("---")
             st.success("💰 **Resumo do Pedido - Bobinas**")
-            st.write(f"📏 Total de Metros Lineares: **{m_total:.2f} m**".replace(".", ","))
-            st.write(f"💵 Valor Bruto: **{_format_brl(valor_bruto_bob)}**")
+            st.write(f"📏 Total de Metros: **{m_total:.2f} m**".replace(".", ","))
+            st.write(f"💵 Valor Bruto: **{_format_brl(valor_bruto)}**")
             if tipo_pedido != "Industrialização":
-                st.write(f"🧾 IPI (9.75%): **{_format_brl(valor_ipi_bob)}**")
-                st.write(f"💰 Valor Final com IPI (9.75%): **{_format_brl(valor_final_bob)}**")
+                st.write(f"🧾 IPI (9.75%): **{_format_brl(valor_ipi)}**")
+                st.write(f"💰 Valor Final com IPI: **{_format_brl(valor_final)}**")
             else:
-                st.write(f"💰 Valor Final: **{_format_brl(valor_final_bob)}**")
-
+                st.write(f"💰 Valor Final: **{_format_brl(valor_final)}**")
+                
             if st.button("🧹 Limpar Bobinas", key="limpar_bob"):
                 st.session_state['bobinas_adicionadas'] = []
                 st.rerun()
