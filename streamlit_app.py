@@ -544,7 +544,8 @@ with col1:
 # Botões PDF e Salve 
 # ============================   
     if st.button("📄 Gerar PDF e Salvar Orçamento"):
-        cliente = {
+    # --- Dados do cliente e vendedor ---
+    cliente = {
         "nome": Cliente_nome,
         "cnpj": Cliente_CNPJ,
         "tipo_cliente": tipo_cliente,
@@ -552,65 +553,68 @@ with col1:
         "frete": frete,
         "tipo_pedido": tipo_pedido
     }
-    vendedor = {"nome": vendedor_nome, "tel": vendedor_tel, "email": vendedor_email}
+    vendedor = {
+        "nome": vendedor_nome,
+        "tel": vendedor_tel,
+        "email": vendedor_email
+    }
 
-    # Salvar orçamento no banco
+    # --- Salvar orçamento no banco ---
     orcamento_id = salvar_orcamento(
-        cliente, 
-        vendedor, 
-        st.session_state["itens_confeccionados"], 
-        st.session_state["bobinas_adicionadas"], 
+        cliente,
+        vendedor,
+        st.session_state["itens_confeccionados"],
+        st.session_state["bobinas_adicionadas"],
         Observacao
     )
-    st.success(f"Orçamento salvo com ID {orcamento_id}")
+    st.success(f"✅ Orçamento salvo com ID {orcamento_id}")
 
-    # Calcular resumos
+    # --- Calcular resumos ---
     resumo_conf = None
     resumo_bob = None
     if st.session_state["itens_confeccionados"]:
         resumo_conf = calcular_valores_confeccionados(
-            st.session_state["itens_confeccionados"], 
-            preco_m2, 
-            tipo_cliente, 
-            estado, 
+            st.session_state["itens_confeccionados"],
+            preco_m2,
+            tipo_cliente,
+            estado,
             tipo_pedido
         )
     if st.session_state["bobinas_adicionadas"]:
         resumo_bob = calcular_valores_bobinas(
-            st.session_state["bobinas_adicionadas"], 
-            preco_m2, 
+            st.session_state["bobinas_adicionadas"],
+            preco_m2,
             tipo_pedido
         )
 
-    # Gerar PDF
+    # --- Gerar PDF ---
     pdf_buffer = gerar_pdf(
-        cliente, 
-        vendedor, 
-        st.session_state["itens_confeccionados"], 
-        st.session_state["bobinas_adicionadas"], 
+        cliente,
+        vendedor,
+        st.session_state["itens_confeccionados"],
+        st.session_state["bobinas_adicionadas"],
         resumo_conf,
         resumo_bob,
-        Observacao, 
+        Observacao,
         preco_m2,
         tipo_cliente=tipo_cliente,
         estado=estado
     )
 
-    # Salvar PDF no disco
+    # --- Salvar PDF no disco ---
     pdf_path = f"orcamento_{orcamento_id}.pdf"
     with open(pdf_path, "wb") as f:
         f.write(pdf_buffer)
-        st.success(f"PDF salvo em disco: {pdf_path}")
-    
-    st.success(f"PDF salvo em disco: {pdf_path}")
+    st.success(f"✅ PDF salvo em disco: {pdf_path}")
 
-    # Botão para download
+    # --- Botão para download ---
     st.download_button(
         "⬇️ Baixar PDF",
         data=pdf_buffer,
         file_name=pdf_path,
         mime="application/pdf"
     )
+
     
 # ============================
 # Histórico de Orçamentos (adicionado sem alterar funções originais)
