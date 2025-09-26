@@ -1,6 +1,5 @@
 streamlit
 datetime
 pytz
-FPDF
-BytesIO
+fpdf
 sqlite3
