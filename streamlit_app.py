@@ -122,35 +122,6 @@ def _format_brl(v):
         return f"R$ {v}"
 
 # ============================
-# Inicialização DB
-# ============================
-init_db()
-
-# ============================
-# Configuração Streamlit
-# ============================
-st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", layout="centered")
-st.title("Orçamento - Grupo Locomotiva")
-
-# ============================
-# Menu
-# ============================
-menu = st.sidebar.selectbox("Menu", ["Novo Orçamento","Histórico de Orçamentos"], index=0, key="menu_selected")
-
-# ============================
-# Session State Defaults
-# ============================
-defaults = {
-    "Cliente_nome": "", "Cliente_CNPJ": "", "tipo_cliente": " ", "estado": None,
-    "tipo_pedido": "Direta", "preco_m2": 0.0, "itens_confeccionados": [],
-    "bobinas_adicionadas": [], "frete_sel": "CIF", "obs": "", 
-    "vend_nome": "", "vend_tel": "", "vend_email": ""
-}
-for k, v in defaults.items():
-    if k not in st.session_state:
-        st.session_state[k] = v
-
-# ============================
 # Cálculos (pequenas proteções)
 # ============================
 st_por_estado = {}  # declarado cedo, depois definido mais abaixo
@@ -651,102 +622,52 @@ if menu == "Histórico de Orçamentos":
     if not orcamentos:
         st.info("Nenhum orçamento encontrado.")
     else:
-        # filtros simples
-        clientes = sorted(list({o[2] for o in orcamentos if o[2]}))
-        cliente_filtro = st.selectbox("Filtrar por cliente:", ["Todos"] + clientes, key="filtro_cliente")
-
-        datas = [datetime.strptime(o[1], "%d/%m/%Y %H:%M") for o in orcamentos]
-        min_data, max_data = min(datas), max(datas)
-        data_inicio, data_fim = st.date_input(
-            "Filtrar por intervalo de datas:",
-            (min_data.date(), max_data.date()),
-            min_value=min_data.date(),
-            max_value=max_data.date(),
-            key="filtro_datas"
-        )
-
-        orcamentos_filtrados = []
         for o in orcamentos:
             orc_id, data_hora, cliente_nome, vendedor_nome = o
-            data_obj = datetime.strptime(data_hora, "%d/%m/%Y %H:%M")
+            pdf_path = f"orcamento_{orc_id}.pdf"
 
-            cliente_ok = (cliente_filtro == "Todos" or cliente_nome == cliente_filtro)
-            data_ok = (data_inicio <= data_obj.date() <= data_fim)
+            with st.expander(f"📝 ID {orc_id} - {cliente_nome} ({data_hora})"):
+                st.markdown(f"**👤 Cliente:** {cliente_nome}")
+                st.markdown(f"**🗣️ Vendedor:** {vendedor_nome}")
 
-            if cliente_ok and data_ok:
-                orcamentos_filtrados.append(o)
+                orc, confecc, bob = carregar_orcamento_por_id(orc_id)
 
-        if not orcamentos_filtrados:
-            st.warning("Nenhum orçamento encontrado com os filtros selecionados.")
-        else:
-            for o in orcamentos_filtrados:
-                orc_id, data_hora, cliente_nome, vendedor_nome = o
-                pdf_path = f"orcamento_{orc_id}.pdf"
+                col1, col2, col3 = st.columns([1,1,1])
+                with col1:
+                    if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
+                        # --- Preencher session_state ---
+                        if orc:
+                            st.session_state["Cliente_nome"] = orc[2] or ""
+                            st.session_state["Cliente_CNPJ"] = orc[3] or ""
+                            st.session_state["tipo_cliente"] = orc[4] or " "
+                            st.session_state["estado"] = orc[5] or list(icms_por_estado.keys())[0]
+                            st.session_state["frete_sel"] = orc[6] or "CIF"
+                            st.session_state["tipo_pedido"] = orc[7] or "Direta"
+                            st.session_state["vend_nome"] = orc[8] or ""
+                            st.session_state["vend_tel"] = orc[9] or ""
+                            st.session_state["vend_email"] = orc[10] or ""
+                            st.session_state["obs"] = orc[11] or ""
 
-                with st.expander(f"📝 ID {orc_id} - {cliente_nome} ({data_hora})"):
-                    st.markdown(f"**👤 Cliente:** {cliente_nome}")
-                    st.markdown(f"**🗣️ Vendedor:** {vendedor_nome}")
+                        # Itens Confeccionados
+                        st.session_state["itens_confeccionados"] = [
+                            {"produto": c[0], "comprimento": float(c[1]), "largura": float(c[2]),
+                             "quantidade": int(c[3]), "cor": c[4] or ""}
+                            for c in confecc
+                        ] if confecc else []
 
-                    orc, confecc, bob = carregar_orcamento_por_id(orc_id)
+                        # Itens Bobinas
+                        st.session_state["bobinas_adicionadas"] = [
+                            {"produto": b[0], "comprimento": float(b[1]), "largura": float(b[2]),
+                             "quantidade": int(b[3]), "cor": b[4] or "",
+                             "espessura": float(b[5]) if b[5] is not None else None,
+                             "preco_unitario": float(b[6]) if b[6] is not None else None}
+                            for b in bob
+                        ] if bob else []
 
-                    if confecc:
-                        st.markdown("### ⬛ Itens Confeccionados")
-                        for c in confecc:
-                            st.markdown(
-                                f"- **{c[0]}**: {c[3]}x {c[1]:.2f}m x {c[2]:.2f}m | Cor: {c[4]}"
-                            )
-
-                    if bob:
-                        st.markdown("### 🔘 Itens Bobinas")
-                        for b in bob:
-                            esp = f" | Esp: {b[5]:.2f}mm" if (b[5] is not None) else ""
-                            st.markdown(
-                                f"- **{b[0]}**: {b[3]}x {b[1]:.2f}m | Largura: {b[2]:.2f}m{esp} | Cor: {b[4]}"
-                            )
-
-                    col1, col2, col3 = st.columns([1,1,1])
-                    with col1:
-                        if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
-                            # Carregar dados do orçamento e preencher session_state
-                            if orc:
-                                # orc indices: 0:id,1:data_hora,2:cliente_nome,3:cliente_cnpj,4:tipo_cliente,5:estado,6:frete,7:tipo_pedido,8:vendedor_nome,9:vendedor_tel,10:vendedor_email,11:observacao
-                                st.session_state["Cliente_nome"] = orc[2] or ""
-                                st.session_state["Cliente_CNPJ"] = orc[3] or ""
-                                st.session_state["tipo_cliente"] = orc[4] or " "
-                                st.session_state["estado"] = orc[5] or list(icms_por_estado.keys())[0]
-                                st.session_state["frete_sel"] = orc[6] or "CIF"
-                                st.session_state["tipo_pedido"] = orc[7] or "Direta"
-                                st.session_state["vend_nome"] = orc[8] or ""
-                                st.session_state["vend_tel"] = orc[9] or ""
-                                st.session_state["vend_email"] = orc[10] or ""
-                                st.session_state["obs"] = orc[11] or ""
-
-                            # colocar itens em session_state (confeccionados e bobinas)
-                            st.session_state["itens_confeccionados"] = [
-                                {"produto": c[0], "comprimento": float(c[1]), "largura": float(c[2]), "quantidade": int(c[3]), "cor": c[4] or ""}
-                                for c in confecc
-                            ] if confecc else []
-
-                            st.session_state["bobinas_adicionadas"] = [
-                                {
-                                    "produto": b[0],
-                                    "comprimento": float(b[1]),
-                                    "largura": float(b[2]),
-                                    "quantidade": int(b[3]),
-                                    "cor": b[4] or "",
-                                    "espessura": float(b[5]) if (b[5] is not None) else None,
-                                    "preco_unitario": float(b[6]) if (b[6] is not None) else None
-                                }
-                                for b in bob
-                            ] if bob else []
-
-                            # jump back to 'Novo Orçamento' tab and rerun to update widgets
-                            # (we set menu in session_state so next rerun opens that page)
-                            st.session_state["menu_selected"] = "Novo Orçamento"
-                            # Try to set sidebar selection by rerunning; Streamlit doesn't allow programmatic change of selectbox value,
-                            # so we simulate by telling user to click back OR we simply rerun and rely on our session_state
-                            st.success("Orçamento reaberto no formulário. Verifique os campos na aba 'Novo Orçamento'.")
-                            st.rerun()
+                        # Forçar aba 'Novo Orçamento'
+                        st.session_state["menu_selected"] = "Novo Orçamento"
+                        st.success("✅ Orçamento reaberto com todos os campos preenchidos na aba 'Novo Orçamento'.")
+                        st.experimental_rerun()
 
                     with col2:
                         if os.path.exists(pdf_path):
