@@ -566,52 +566,21 @@ with col1:
         st.download_button("⬇️ Baixar PDF", pdf_buffer, file_name="orcamento.pdf", mime="application/pdf")
 
 # ============================
-# Histórico de Orçamentos
+# Histórico de Orçamentos (adicionado sem alterar funções originais)
 # ============================
 if menu=="Histórico de Orçamentos":
     st.subheader("📋 Histórico de Orçamentos")
     orcamentos = buscar_orcamentos()
-    
     for o in orcamentos:
-        st.markdown(f"### Orçamento ID {o[0]} | Data: {o[1]} | Cliente: {o[2]} | Vendedor: {o[3]}")
-        orc, confecc, bob = carregar_orcamento_por_id(o[0])
-        
-        # Itens Confeccionados
-        if confecc:
-            st.markdown("**Itens Confeccionados:**")
-            df_confecc = []
-            for c in confecc:
-                df_confecc.append({
-                    "Produto": c[0],
-                    "Comprimento (m)": c[1],
-                    "Largura (m)": c[2],
-                    "Quantidade": c[3],
-                    "Cor": c[4]
-                })
-            st.table(df_confecc)
-        
-        # Itens Bobinas
-        if bob:
-            st.markdown("**Itens Bobina:**")
-            df_bob = []
-            for b in bob:
-                df_bob.append({
-                    "Produto": b[0],
-                    "Comprimento (m)": b[1],
-                    "Largura (m)": b[2],
-                    "Quantidade": b[3],
-                    "Cor": b[4],
-                    "Espessura (mm)": b[5],
-                    "Preço Unitário (R$)": _format_brl(b[6])
-                })
-            st.table(df_bob)
-        
-        # Observação
-        if orc[11]:
-            st.markdown(f"**Observações:** {orc[11]}")
+        st.write(f"ID {o[0]} | Data: {o[1]} | Cliente: {o[2]} | Vendedor: {o[3]}")
+        if st.button(f"🔄 Reabrir ID {o[0]}", key=f"reabrir_{o[0]}"):
+            orc, confecc, bob = carregar_orcamento_por_id(o[0])
+            st.session_state["itens_confeccionados"] = [{"produto":c[0],"comprimento":c[1],"largura":c[2],"quantidade":c[3],"cor":c[4]} for c in confecc]
+            st.session_state["bobinas_adicionadas"] = [{"produto":b[0],"comprimento":b[1],"largura":b[2],"quantidade":b[3],"cor":b[4],"espessura":b[5],"preco_unitario":b[6]} for b in bob]
+            st.rerun()
         
         # Botão para reabrir orçamento
         if st.button(f"🔄 Reabrir ID {o[0]}", key=f"reabrir_{o[0]}"):
             st.session_state["itens_confeccionados"] = [{"produto":c[0],"comprimento":c[1],"largura":c[2],"quantidade":c[3],"cor":c[4]} for c in confecc]
             st.session_state["bobinas_adicionadas"] = [{"produto":b[0],"comprimento":b[1],"largura":b[2],"quantidade":b[3],"cor":b[4],"espessura":b[5],"preco_unitario":b[6]} for b in bob]
-            st.experimental_rerun()
+            st.rerun()
