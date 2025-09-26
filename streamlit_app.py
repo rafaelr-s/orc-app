@@ -541,9 +541,9 @@ with col1:
         vendedor_email = st.text_input("E-mail")
 
 # ============================ 
-# Botões PDF e Salve 
+# Botões PDF e Salvar 
 # ============================   
-    if st.button("📄 Gerar PDF e Salvar Orçamento"):
+if st.button("📄 Gerar PDF e Salvar Orçamento"):
     # --- Dados do cliente e vendedor ---
     cliente = {
         "nome": Cliente_nome,
