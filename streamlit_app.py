@@ -59,6 +59,7 @@ def init_db():
 def salvar_orcamento(cliente, vendedor, itens_confeccionados, itens_bobinas, observacao):
     conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
+
     cur.execute("""
         INSERT INTO orcamentos (data_hora, cliente_nome, cliente_cnpj, tipo_cliente, estado, frete, tipo_pedido, vendedor_nome, vendedor_tel, vendedor_email, observacao)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -120,7 +121,7 @@ def _format_brl(v):
     return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 # ============================
-# Função para gerar PDF
+# Função para gerar PDF (retorna bytes)
 # ============================
 def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_conf, resumo_bob, observacao, preco_m2, tipo_cliente="", estado=""):
     pdf = FPDF()
@@ -197,7 +198,7 @@ def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_con
                 f"{item['quantidade']}x {item['produto']} - {item['comprimento']}m | Largura: {item['largura']}m "
                 f"| Cor: {item.get('cor','')} | Valor Bruto: {_format_brl(valor_item)}"
             )
-            if "espessura" in item:
+            if "espessura" in item and item.get('espessura') is not None:
                 esp = f"{item['espessura']:.2f}".replace(".", ",")
                 txt += f" | Esp: {esp} mm"
                 txt += f" | Preço metro: {_format_brl(preco_item)}"
@@ -237,6 +238,7 @@ def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_con
         pdf.multi_cell(largura_util, 8, vendedor_txt)
         pdf.ln(5)
 
+    # Retorna bytes do PDF
     pdf_bytes = pdf.output(dest='S').encode('latin1')
     return pdf_bytes
 
@@ -256,7 +258,7 @@ st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", 
 st.title("Orçamento - Grupo Locomotiva")
 
 # --- Menu ---
-menu = st.sidebar.selectbox("Menu", ["Novo Orçamento","Histórico de Orçamentos"])
+menu = st.sidebar.selectbox("Menu", ["Novo Orçamento","Histórico de Orçamentos"], index=0)
 
 # ============================
 # Tabelas de ICMS e ST
@@ -390,7 +392,7 @@ if tipo_produto == "Confeccionado":
     with col3:
         quantidade = st.number_input("Quantidade:", min_value=1, value=1, step=1, key="qtd_conf")
 
-    if st.button("➕ Adicionar Medida"):
+    if st.button("➕ Adicionar Medida", key="add_conf"):
         st.session_state['itens_confeccionados'].append({
             'produto': produto,
             'comprimento': comprimento,
@@ -418,11 +420,11 @@ if tipo_produto == "Confeccionado":
                 remover = st.button("❌", key=f"remover_conf_{idx}")
                 if remover:
                     st.session_state['itens_confeccionados'].pop(idx)
-                    st.rerun()
+                    st.experimental_rerun()
 
-    if st.button("🧹 Limpar Itens"):
+    if st.button("🧹 Limpar Itens", key="limpar_conf"):
         st.session_state['itens_confeccionados'] = []
-        st.rerun()
+        st.experimental_rerun()
 
     if st.session_state['itens_confeccionados']:
         m2_total, valor_bruto, valor_ipi, valor_final, valor_st, aliquota_st = calcular_valores_confeccionados(
@@ -458,7 +460,7 @@ if tipo_produto == "Bobina":
     if produto.startswith(prefixos_espessura):
         espessura_bobina = st.number_input("Espessura da Bobina (mm):", min_value=0.010, value=0.10, step=0.010, key="esp_bob")
 
-    if st.button("➕ Adicionar Bobina"):
+    if st.button("➕ Adicionar Bobina", key="add_bob"):
         item_bobina = {
             'produto': produto,
             'comprimento': comprimento,
@@ -486,7 +488,7 @@ if tipo_produto == "Bobina":
                     f"🔹 {item['quantidade']}x {item['comprimento']:.2f}m | Largura: {item['largura']:.2f}m "
                     f"= {metros_item:.2f} m → {_format_brl(valor_item)}"
                 )
-                if 'espessura' in item:
+                if 'espessura' in item and item.get('espessura') is not None:
                     detalhes += f" | Esp: {item['espessura']:.2f}mm"
                     detalhes += f" | unit: {_format_brl(item.get('preco_unitario', preco_m2))}"
                 st.markdown(f"**{item['produto']}**")
@@ -498,7 +500,7 @@ if tipo_produto == "Bobina":
                 remover = st.button("❌", key=f"remover_bob_{idx}")
                 if remover:
                     st.session_state['bobinas_adicionadas'].pop(idx)
-                    st.rerun()
+                    st.experimental_rerun()
 
         m_total, valor_bruto, valor_ipi, valor_final = calcular_valores_bobinas(
             st.session_state['bobinas_adicionadas'], preco_m2, tipo_pedido
@@ -514,34 +516,34 @@ if tipo_produto == "Bobina":
         else:
             st.write(f"💰 Valor Final: **{_format_brl(valor_final)}**")
 
-        if st.button("🧹 Limpar Bobinas"):
+        if st.button("🧹 Limpar Bobinas", key="limpar_bob"):
             st.session_state['bobinas_adicionadas'] = []
-            st.rerun()
+            st.experimental_rerun()
 
 # ============================
 # Tipo de Frete
 # ============================
 st.subheader("🚚 Tipo de Frete")
-frete = st.radio("Selecione o tipo de frete:", ["CIF", "FOB"])
+frete = st.radio("Selecione o tipo de frete:", ["CIF", "FOB"], key="frete_sel")
 
 # ============================ 
 # Observações e Vendedor 
 # ============================
 st.subheader("🔎 Observações")
-Observacao = st.text_area("Insira aqui alguma observação sobre o orçamento (opcional)")
+Observacao = st.text_area("Insira aqui alguma observação sobre o orçamento (opcional)", key="obs")
 
 st.subheader("🗣️ Vendedor(a)")
 col1, col2 = st.columns(2)
 with col1:
-    vendedor_nome = st.text_input("Nome")
-    vendedor_tel = st.text_input("Telefone")
-    with col2:
-        vendedor_email = st.text_input("E-mail")
+    vendedor_nome = st.text_input("Nome", key="vend_nome")
+    vendedor_tel = st.text_input("Telefone", key="vend_tel")
+with col2:
+    vendedor_email = st.text_input("E-mail", key="vend_email")
 
 # ============================ 
 # Botões PDF e Salvar 
 # ============================   
-if st.button("📄 Gerar PDF e Salvar Orçamento"):
+if st.button("📄 Gerar PDF e Salvar Orçamento", key="gerar_e_salvar"):
     # --- Dados do cliente e vendedor ---
     cliente = {
         "nome": Cliente_nome,
@@ -578,21 +580,15 @@ if st.button("📄 Gerar PDF e Salvar Orçamento"):
             estado,
             tipo_pedido
         )
-    st.session_state["bobinas_adicionadas"] = [
-    {
-        "produto": b[0],
-        "comprimento": b[1],
-        "largura": b[2],
-        "quantidade": b[3],
-        "cor": b[4],
-        "espessura": b[5],
-        "preco_unitario": b[6] if b[6] is not None else preco_m2  # garante valor padrão
-    }
-    for b in bob
-]
+    if st.session_state["bobinas_adicionadas"]:
+        resumo_bob = calcular_valores_bobinas(
+            st.session_state["bobinas_adicionadas"],
+            preco_m2,
+            tipo_pedido
+        )
 
     # --- Gerar PDF ---
-    pdf_buffer = gerar_pdf(
+    pdf_bytes = gerar_pdf(
         cliente,
         vendedor,
         st.session_state["itens_confeccionados"],
@@ -608,15 +604,16 @@ if st.button("📄 Gerar PDF e Salvar Orçamento"):
     # --- Salvar PDF no disco ---
     pdf_path = f"orcamento_{orcamento_id}.pdf"
     with open(pdf_path, "wb") as f:
-        f.write(pdf_buffer)
+        f.write(pdf_bytes)
     st.success(f"✅ PDF salvo em disco: {pdf_path}")
 
-    # --- Botão para download ---
+    # --- Botão para download (única chave por orçamento) ---
     st.download_button(
         "⬇️ Baixar PDF",
-        data=pdf_buffer,
-        file_name=pdf_path,
-        mime="application/pdf"
+        data=pdf_bytes,
+        file_name=f"orcamento_{orcamento_id}.pdf",
+        mime="application/pdf",
+        key=f"download_generated_{orcamento_id}"
     )
 
 # ============================
@@ -629,23 +626,26 @@ if menu == "Histórico de Orçamentos":
     st.markdown("### 🔎 Filtros")
     col1, col2 = st.columns(2)
     with col1:
-        filtro_cliente = st.text_input("Filtrar por cliente (nome ou parte):")
+        filtro_cliente = st.text_input("Filtrar por cliente (nome ou parte):", key="filtro_cliente")
     with col2:
-        data_inicio = st.date_input("Data inicial", value=None)
-        data_fim = st.date_input("Data final", value=None)
+        # Usamos None-safe: se usuário não selecionar, deixamos vazios
+        data_inicio = st.date_input("Data inicial", key="filtro_dt_inicio")
+        data_fim = st.date_input("Data final", key="filtro_dt_fim")
 
     # Buscar todos orçamentos
     orcamentos = buscar_orcamentos()
     
     # Filtrar por cliente
-    if filtro_cliente.strip():
-        orcamentos = [o for o in orcamentos if filtro_cliente.lower() in o[2].lower()]
+    if filtro_cliente and filtro_cliente.strip():
+        orcamentos = [o for o in orcamentos if filtro_cliente.lower() in (o[2] or "").lower()]
     
-    # Filtrar por datas
+    # Filtrar por datas (considerando formato dd/mm/YYYY HH:MM)
     if data_inicio or data_fim:
         def dentro_do_intervalo(data_str):
-            # data_str tem formato "dd/mm/YYYY HH:MM"
-            data_obj = datetime.strptime(data_str, "%d/%m/%Y %H:%M")
+            try:
+                data_obj = datetime.strptime(data_str, "%d/%m/%Y %H:%M")
+            except Exception:
+                return True
             if data_inicio and data_obj.date() < data_inicio:
                 return False
             if data_fim and data_obj.date() > data_fim:
@@ -672,14 +672,14 @@ if menu == "Histórico de Orçamentos":
                     st.markdown("### ⬛ Itens Confeccionados")
                     for item in confecc:
                         st.markdown(
-                            f"- **{c[0]}**: {c[3]}x {c[1]:.2f}m x {c[2]:.2f}m | Cor: {c[4]}"
+                            f"- **{item[0]}**: {item[3]}x {item[1]:.2f}m x {item[2]:.2f}m | Cor: {item[4]}"
                         )
 
                 # Exibir itens bobinas
                 if bob:
                     st.markdown("### 🔘 Itens Bobinas")
-                    for item in bob:
-                        esp = f" | Esp: {b[5]:.2f}mm" if b[5] else ""
+                    for b in bob:
+                        esp = f" | Esp: {b[5]:.2f}mm" if (b[5] is not None) else ""
                         st.markdown(
                             f"- **{b[0]}**: {b[3]}x {b[1]:.2f}m | Largura: {b[2]:.2f}m{esp} | Cor: {b[4]}"
                         )
@@ -688,6 +688,8 @@ if menu == "Histórico de Orçamentos":
                 col1, col2, col3 = st.columns([1,1,1])
                 with col1:
                     if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
+                        # Recarrega os dados e popula session_state
+                        orc, confecc, bob = carregar_orcamento_por_id(orc_id)
                         st.session_state["itens_confeccionados"] = [
                             {"produto": c[0], "comprimento": c[1], "largura": c[2],
                              "quantidade": c[3], "cor": c[4]} for c in confecc
@@ -700,22 +702,23 @@ if menu == "Histórico de Orçamentos":
                                 "quantidade": b[3],
                                 "cor": b[4],
                                 "espessura": b[5],
-                                "preco_unitario": b[6] if b[6] is not None else 0.0
+                                "preco_unitario": b[6] if (len(b) > 6 and b[6] is not None) else 0.0
                             }
                             for b in bob
                         ]
-                        st.rerun()
+                        st.experimental_rerun()
 
                 with col2:
                     if os.path.exists(pdf_path):
                         with open(pdf_path, "rb") as f:
-                            st.download_button(
-                                "⬇️ Baixar PDF",
-                                f,
-                                file_name=pdf_path,
-                                mime="application/pdf",
-                                key=f"download_{orc_id}"
-                            )
+                            data = f.read()
+                        st.download_button(
+                            "⬇️ Baixar PDF",
+                            data=data,
+                            file_name=os.path.basename(pdf_path),
+                            mime="application/pdf",
+                            key=f"download_{orc_id}"
+                        )
                     else:
                         st.warning("PDF ainda não gerado.")
 
@@ -731,4 +734,4 @@ if menu == "Histórico de Orçamentos":
                         if os.path.exists(pdf_path):
                             os.remove(pdf_path)
                         st.success(f"Orçamento ID {orc_id} excluído!")
-                        st.rerun()
+                        st.experimental_rerun()
