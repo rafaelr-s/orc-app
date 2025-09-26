@@ -614,29 +614,62 @@ if st.button("📄 Gerar PDF e Salvar Orçamento"):
     )
 
 # ============================
-# Histórico de Orçamentos (adicionado sem alterar funções originais)
+# Página de Histórico de Orçamentos com filtros
 # ============================
 if menu == "Histórico de Orçamentos":
     st.subheader("📋 Histórico de Orçamentos Salvos")
+
+    # --- Filtros ---
+    st.markdown("### 🔎 Filtros")
+    col1, col2 = st.columns(2)
+    with col1:
+        filtro_cliente = st.text_input("Filtrar por cliente (nome ou parte):")
+    with col2:
+        data_inicio = st.date_input("Data inicial", value=None)
+        data_fim = st.date_input("Data final", value=None)
+
+    # Buscar todos orçamentos
     orcamentos = buscar_orcamentos()
+    
+    # Filtrar por cliente
+    if filtro_cliente.strip():
+        orcamentos = [o for o in orcamentos if filtro_cliente.lower() in o[2].lower()]
+    
+    # Filtrar por datas
+    if data_inicio or data_fim:
+        def dentro_do_intervalo(data_str):
+            # data_str tem formato "dd/mm/YYYY HH:MM"
+            data_obj = datetime.strptime(data_str, "%d/%m/%Y %H:%M")
+            if data_inicio and data_obj.date() < data_inicio:
+                return False
+            if data_fim and data_obj.date() > data_fim:
+                return False
+            return True
+        orcamentos = [o for o in orcamentos if dentro_do_intervalo(o[1])]
+
     if not orcamentos:
-        st.info("Nenhum orçamento encontrado.")
+        st.info("Nenhum orçamento encontrado para os filtros aplicados.")
     else:
-        for idx, o in enumerate(orcamentos):
+        for o in orcamentos:
             orc_id, data_hora, cliente_nome, vendedor_nome = o
             pdf_path = f"orcamento_{orc_id}.pdf"
-            with st.expander(f"📝 Orçamento ID {orc_id} - {cliente_nome}", expanded=False):
-                st.markdown(f"**📅 Data:** {data_hora}")
+
+            with st.expander(f"📝 ID {orc_id} - {cliente_nome} ({data_hora})"):
                 st.markdown(f"**👤 Cliente:** {cliente_nome}")
                 st.markdown(f"**🗣️ Vendedor:** {vendedor_nome}")
 
+                # Carregar itens do orçamento
                 orc, confecc, bob = carregar_orcamento_por_id(orc_id)
+
+                # Exibir itens confeccionados
                 if confecc:
                     st.markdown("### ⬛ Itens Confeccionados")
                     for item in confecc:
                         st.markdown(
                             f"- **{item[0]}**: {item[3]}x {item[1]:.2f}m x {item[2]:.2f}m | Cor: {item[4]}"
                         )
+
+                # Exibir itens bobinas
                 if bob:
                     st.markdown("### 🔘 Itens Bobinas")
                     for item in bob:
@@ -645,34 +678,43 @@ if menu == "Histórico de Orçamentos":
                             f"- **{item[0]}**: {item[3]}x {item[1]:.2f}m | Largura: {item[2]:.2f}m{esp} | Cor: {item[4]}"
                         )
 
+                # Botões em colunas
                 col1, col2, col3 = st.columns([1,1,1])
                 with col1:
-                    if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}_{idx}"):
+                    if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
                         st.session_state["itens_confeccionados"] = [
-                            {"produto": c[0],"comprimento": c[1],"largura": c[2],
-                             "quantidade": c[3],"cor": c[4]} for c in confecc
+                            {"produto": c[0], "comprimento": c[1], "largura": c[2],
+                             "quantidade": c[3], "cor": c[4]} for c in confecc
                         ]
                         st.session_state["bobinas_adicionadas"] = [
-                            {"produto": b[0],"comprimento": b[1],"largura": b[2],
-                             "quantidade": b[3],"cor": b[4],"espessura": b[5],
-                             "preco_unitario": b[6]} for b in bob
+                            {
+                                "produto": b[0],
+                                "comprimento": b[1],
+                                "largura": b[2],
+                                "quantidade": b[3],
+                                "cor": b[4],
+                                "espessura": b[5],
+                                "preco_unitario": b[6] if b[6] is not None else 0.0
+                            }
+                            for b in bob
                         ]
-                        st.success(f"Orçamento {orc_id} carregado para edição.")
-                        st.rerun()
+                        st.experimental_rerun()
+
                 with col2:
                     if os.path.exists(pdf_path):
                         with open(pdf_path, "rb") as f:
                             st.download_button(
                                 "⬇️ Baixar PDF",
-                                data=f,
+                                f,
                                 file_name=pdf_path,
                                 mime="application/pdf",
-                                key=f"download_{orc_id}_{idx}"
+                                key=f"download_{orc_id}"
                             )
                     else:
                         st.warning("PDF ainda não gerado.")
+
                 with col3:
-                    if st.button("🗑️ Excluir Orçamento", key=f"excluir_{orc_id}_{idx}"):
+                    if st.button("❌ Excluir", key=f"excluir_{orc_id}"):
                         conn = sqlite3.connect("orcamentos.db")
                         cur = conn.cursor()
                         cur.execute("DELETE FROM orcamentos WHERE id=?", (orc_id,))
@@ -682,5 +724,5 @@ if menu == "Histórico de Orçamentos":
                         conn.close()
                         if os.path.exists(pdf_path):
                             os.remove(pdf_path)
-                        st.success(f"Orçamento {orc_id} excluído com sucesso.")
-                        st.rerun()
+                        st.success(f"Orçamento ID {orc_id} excluído!")
+                        st.experimental_rerun()
