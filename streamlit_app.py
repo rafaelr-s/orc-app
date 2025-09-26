@@ -617,121 +617,114 @@ if st.button("📄 Gerar PDF e Salvar Orçamento", key="gerar_e_salvar"):
     )
 
 # ============================
-# Página de Histórico de Orçamentos com filtros
+# Página de Histórico
 # ============================
 if menu == "Histórico de Orçamentos":
     st.subheader("📋 Histórico de Orçamentos Salvos")
 
-    # --- Filtros ---
-    st.markdown("### 🔎 Filtros")
-    col1, col2 = st.columns(2)
-    with col1:
-        filtro_cliente = st.text_input("Filtrar por cliente (nome ou parte):", key="filtro_cliente")
-    with col2:
-        # Usamos None-safe: se usuário não selecionar, deixamos vazios
-        data_inicio = st.date_input("Data inicial", key="filtro_dt_inicio")
-        data_fim = st.date_input("Data final", key="filtro_dt_fim")
-
-    # Buscar todos orçamentos
     orcamentos = buscar_orcamentos()
-    
-    # Filtrar por cliente
-    if filtro_cliente and filtro_cliente.strip():
-        orcamentos = [o for o in orcamentos if filtro_cliente.lower() in (o[2] or "").lower()]
-    
-    # Filtrar por datas (considerando formato dd/mm/YYYY HH:MM)
-    if data_inicio or data_fim:
-        def dentro_do_intervalo(data_str):
-            try:
-                data_obj = datetime.strptime(data_str, "%d/%m/%Y %H:%M")
-            except Exception:
-                return True
-            if data_inicio and data_obj.date() < data_inicio:
-                return False
-            if data_fim and data_obj.date() > data_fim:
-                return False
-            return True
-        orcamentos = [o for o in orcamentos if dentro_do_intervalo(o[1])]
-
     if not orcamentos:
-        st.info("Nenhum orçamento encontrado para os filtros aplicados.")
+        st.info("Nenhum orçamento encontrado.")
     else:
+        # 🔹 Filtros
+        st.markdown("### 🔍 Filtros")
+        clientes = sorted(list({o[2] for o in orcamentos if o[2]}))
+        cliente_filtro = st.selectbox("Filtrar por cliente:", ["Todos"] + clientes)
+
+        datas = [datetime.strptime(o[1], "%d/%m/%Y %H:%M") for o in orcamentos]
+        min_data, max_data = min(datas), max(datas)
+        data_inicio, data_fim = st.date_input(
+            "Filtrar por intervalo de datas:",
+            (min_data.date(), max_data.date()),
+            min_value=min_data.date(),
+            max_value=max_data.date()
+        )
+
+        # 🔹 Aplicar filtros
+        orcamentos_filtrados = []
         for o in orcamentos:
             orc_id, data_hora, cliente_nome, vendedor_nome = o
-            pdf_path = f"orcamento_{orc_id}.pdf"
+            data_obj = datetime.strptime(data_hora, "%d/%m/%Y %H:%M")
 
-            with st.expander(f"📝 ID {orc_id} - {cliente_nome} ({data_hora})"):
-                st.markdown(f"**👤 Cliente:** {cliente_nome}")
-                st.markdown(f"**🗣️ Vendedor:** {vendedor_nome}")
+            cliente_ok = (cliente_filtro == "Todos" or cliente_nome == cliente_filtro)
+            data_ok = (data_inicio <= data_obj.date() <= data_fim)
 
-                # Carregar itens do orçamento
-                orc, confecc, bob = carregar_orcamento_por_id(orc_id)
+            if cliente_ok and data_ok:
+                orcamentos_filtrados.append(o)
 
-                # Exibir itens confeccionados
-                if confecc:
-                    st.markdown("### ⬛ Itens Confeccionados")
-                    for item in confecc:
-                        st.markdown(
-                            f"- **{item[0]}**: {item[3]}x {item[1]:.2f}m x {item[2]:.2f}m | Cor: {item[4]}"
-                        )
+        if not orcamentos_filtrados:
+            st.warning("Nenhum orçamento encontrado com os filtros selecionados.")
+        else:
+            # 🔹 Exibição dos orçamentos filtrados
+            for o in orcamentos_filtrados:
+                orc_id, data_hora, cliente_nome, vendedor_nome = o
+                pdf_path = f"orcamento_{orc_id}.pdf"
 
-                # Exibir itens bobinas
-                if bob:
-                    st.markdown("### 🔘 Itens Bobinas")
-                    for b in bob:
-                        esp = f" | Esp: {b[5]:.2f}mm" if (b[5] is not None) else ""
-                        st.markdown(
-                            f"- **{b[0]}**: {b[3]}x {b[1]:.2f}m | Largura: {b[2]:.2f}m{esp} | Cor: {b[4]}"
-                        )
+                with st.expander(f"📝 ID {orc_id} - {cliente_nome} ({data_hora})"):
+                    st.markdown(f"**👤 Cliente:** {cliente_nome}")
+                    st.markdown(f"**🗣️ Vendedor:** {vendedor_nome}")
 
-                # Botões em colunas
-                col1, col2, col3 = st.columns([1,1,1])
-                with col1:
-                    if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
-                        # Recarrega os dados e popula session_state
-                        orc, confecc, bob = carregar_orcamento_por_id(orc_id)
-                        st.session_state["itens_confeccionados"] = [
-                            {"produto": c[0], "comprimento": c[1], "largura": c[2],
-                             "quantidade": c[3], "cor": c[4]} for c in confecc
-                        ]
-                        st.session_state["bobinas_adicionadas"] = [
-                            {
-                                "produto": b[0],
-                                "comprimento": b[1],
-                                "largura": b[2],
-                                "quantidade": b[3],
-                                "cor": b[4],
-                                "espessura": b[5],
-                                "preco_unitario": b[6] if (len(b) > 6 and b[6] is not None) else 0.0
-                            }
-                            for b in bob
-                        ]
-                        st.experimental_rerun()
+                    orc, confecc, bob = carregar_orcamento_por_id(orc_id)
 
-                with col2:
-                    if os.path.exists(pdf_path):
-                        with open(pdf_path, "rb") as f:
-                            data = f.read()
-                        st.download_button(
-                            "⬇️ Baixar PDF",
-                            data=data,
-                            file_name=os.path.basename(pdf_path),
-                            mime="application/pdf",
-                            key=f"download_{orc_id}"
-                        )
-                    else:
-                        st.warning("PDF ainda não gerado.")
+                    if confecc:
+                        st.markdown("### ⬛ Itens Confeccionados")
+                        for c in confecc:
+                            st.markdown(
+                                f"- **{c[0]}**: {c[3]}x {c[1]:.2f}m x {c[2]:.2f}m | Cor: {c[4]}"
+                            )
 
-                with col3:
-                    if st.button("❌ Excluir", key=f"excluir_{orc_id}"):
-                        conn = sqlite3.connect("orcamentos.db")
-                        cur = conn.cursor()
-                        cur.execute("DELETE FROM orcamentos WHERE id=?", (orc_id,))
-                        cur.execute("DELETE FROM itens_confeccionados WHERE orcamento_id=?", (orc_id,))
-                        cur.execute("DELETE FROM itens_bobinas WHERE orcamento_id=?", (orc_id,))
-                        conn.commit()
-                        conn.close()
+                    if bob:
+                        st.markdown("### 🔘 Itens Bobinas")
+                        for b in bob:
+                            esp = f" | Esp: {b[5]:.2f}mm" if b[5] is not None else ""
+                            st.markdown(
+                                f"- **{b[0]}**: {b[3]}x {b[1]:.2f}m | Largura: {b[2]:.2f}m{esp} | Cor: {b[4]}"
+                            )
+
+                    col1, col2, col3 = st.columns([1,1,1])
+                    with col1:
+                        if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
+                            st.session_state["itens_confeccionados"] = [
+                                {"produto": c[0], "comprimento": c[1], "largura": c[2],
+                                 "quantidade": c[3], "cor": c[4]} for c in confecc
+                            ]
+                            st.session_state["bobinas_adicionadas"] = [
+                                {
+                                    "produto": b[0],
+                                    "comprimento": b[1],
+                                    "largura": b[2],
+                                    "quantidade": b[3],
+                                    "cor": b[4],
+                                    "espessura": b[5],
+                                    "preco_unitario": b[6] if b[6] is not None else 0.0
+                                }
+                                for b in bob
+                            ]
+                            st.rerun()
+
+                    with col2:
                         if os.path.exists(pdf_path):
-                            os.remove(pdf_path)
-                        st.success(f"Orçamento ID {orc_id} excluído!")
-                        st.experimental_rerun()
+                            with open(pdf_path, "rb") as f:
+                                st.download_button(
+                                    "⬇️ Baixar PDF",
+                                    f,
+                                    file_name=pdf_path,
+                                    mime="application/pdf",
+                                    key=f"download_{orc_id}"
+                                )
+                        else:
+                            st.warning("PDF ainda não gerado.")
+
+                    with col3:
+                        if st.button("❌ Excluir", key=f"excluir_{orc_id}"):
+                            conn = sqlite3.connect("orcamentos.db")
+                            cur = conn.cursor()
+                            cur.execute("DELETE FROM orcamentos WHERE id=?", (orc_id,))
+                            cur.execute("DELETE FROM itens_confeccionados WHERE orcamento_id=?", (orc_id,))
+                            cur.execute("DELETE FROM itens_bobinas WHERE orcamento_id=?", (orc_id,))
+                            conn.commit()
+                            conn.close()
+                            if os.path.exists(pdf_path):
+                                os.remove(pdf_path)
+                            st.success(f"Orçamento ID {orc_id} excluído!")
+                            st.rerun()
