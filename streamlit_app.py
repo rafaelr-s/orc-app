@@ -558,7 +558,7 @@ with col1:
 # Botões PDF e Salve 
 # ============================   
     if st.button("📄 Gerar PDF e Salvar Orçamento"):
-    cliente = {
+        cliente = {
         "nome": Cliente_nome,
         "cnpj": Cliente_CNPJ,
         "tipo_cliente": tipo_cliente,
@@ -601,14 +601,15 @@ with col1:
         vendedor, 
         st.session_state["itens_confeccionados"], 
         st.session_state["bobinas_adicionadas"], 
-        resumo_conf,          # <- corrigido
-        resumo_bob,           # <- corrigido
+        resumo_conf,          
+        resumo_bob,           
         Observacao, 
         preco_m2,
         tipo_cliente=tipo_cliente,
         estado=estado
     )
     st.download_button("⬇️ Baixar PDF", pdf_buffer, file_name="orcamento.pdf", mime="application/pdf")
+
     
 # ============================
 # Histórico de Orçamentos (adicionado sem alterar funções originais)
