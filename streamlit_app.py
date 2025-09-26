@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 from datetime import datetime
 import pytz
@@ -490,12 +491,13 @@ if menu == "Novo Orçamento":
                 'espessura': float(espessura_bobina) if espessura_bobina is not None else None,
                 'preco_unitario': preco_m2
             }
-            st.session_state['bobinas_adicionadas'].append(item_bobina)
-            st.rerun()
+                
+                st.session_state['bobinas_adicionadas'].append(item_bobina)
+        st.rerun()
 
         if st.session_state['bobinas_adicionadas']:
-            st.subheader("📋 Bobinas Adicionadas")
-            for idx, item in enumerate(st.session_state['bobinas_adicionadas'][:]):
+           st.subheader("📋 Bobinas Adicionadas")
+           for idx, item in enumerate(st.session_state['bobinas_adicionadas'][:]):
                 metros_item = item['comprimento'] * item['quantidade']
                 preco_item = item.get('preco_unitario') if item.get('preco_unitario') is not None else preco_m2
                 valor_item = metros_item * preco_item
@@ -746,4 +748,3 @@ if menu == "Histórico de Orçamentos":
                                 os.remove(pdf_path)
                             st.success(f"Orçamento ID {orc_id} excluído!")
                             st.rerun()
-
