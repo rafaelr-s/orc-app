@@ -747,4 +747,4 @@ if menu == "Histórico de Orçamentos":
                             if os.path.exists(pdf_path):
                                 os.remove(pdf_path)
                             st.success(f"Orçamento ID {orc_id} excluído!")
-                            st.experimental_rerun()
+                            st.rerun()
