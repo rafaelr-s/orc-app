@@ -481,7 +481,7 @@ if menu == "Novo Orçamento":
             espessura_bobina = st.number_input("Espessura da Bobina (mm):", min_value=0.010, value=0.10, step=0.010, key="esp_bob")
 
         if st.button("➕ Adicionar Bobina", key="add_bob"):
-                        item_bobina = {
+                item_bobina = {
                 'produto': produto,
                 'comprimento': float(comprimento),
                 'largura': float(largura_bobina),
@@ -515,6 +515,10 @@ if menu == "Novo Orçamento":
                     if remover:
                         st.session_state['bobinas_adicionadas'].pop(idx)
                         st.rerun()
+                        
+                    if st.button("🧹 Limpar Bobinas", key="limpar_bob"):
+                        st.session_state['bobinas_adicionadas'] = []
+                        st.rerun()
 
         if st.session_state['bobinas_adicionadas']:
             m_total, valor_bruto, valor_ipi, valor_final = calcular_valores_bobinas(
@@ -530,9 +534,7 @@ if menu == "Novo Orçamento":
             else:
                 st.write(f"💰 Valor Final: **{_format_brl(valor_final)}**")
                 
-            if st.button("🧹 Limpar Bobinas", key="limpar_bob"):
-                st.session_state['bobinas_adicionadas'] = []
-                st.rerun()
+            
 
     # Tipo de frete / observações / vendedor (com chaves para session_state)
     st.markdown("---")
