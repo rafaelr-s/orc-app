@@ -338,9 +338,6 @@ def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
 # ============================
 # Interface Streamlit
 # ============================
-st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", layout="centered")
-st.title("Orçamento - Grupo Locomotiva")
-
 brasilia_tz = pytz.timezone("America/Sao_Paulo")
 data_hora_brasilia = datetime.now(brasilia_tz).strftime("%d/%m/%Y %H:%M")
 st.markdown(f"🕒 **Data e Hora:** {data_hora_brasilia}")
