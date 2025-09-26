@@ -578,12 +578,18 @@ if st.button("📄 Gerar PDF e Salvar Orçamento"):
             estado,
             tipo_pedido
         )
-    if st.session_state["bobinas_adicionadas"]:
-        resumo_bob = calcular_valores_bobinas(
-            st.session_state["bobinas_adicionadas"],
-            preco_m2,
-            tipo_pedido
-        )
+    st.session_state["bobinas_adicionadas"] = [
+    {
+        "produto": b[0],
+        "comprimento": b[1],
+        "largura": b[2],
+        "quantidade": b[3],
+        "cor": b[4],
+        "espessura": b[5],
+        "preco_unitario": b[6] if b[6] is not None else preco_m2  # garante valor padrão
+    }
+    for b in bob
+]
 
     # --- Gerar PDF ---
     pdf_buffer = gerar_pdf(
