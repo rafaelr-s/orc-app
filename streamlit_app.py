@@ -1,13 +1,11 @@
-# app.py
 import streamlit as st
 from datetime import datetime
 import pytz
 from fpdf import FPDF
 import sqlite3
-import os
 
 # ============================
-# Banco SQLite
+# Funções de Banco de Dados
 # ============================
 def init_db():
     conn = sqlite3.connect("orcamentos.db")
@@ -60,7 +58,6 @@ def init_db():
 def salvar_orcamento(cliente, vendedor, itens_confeccionados, itens_bobinas, observacao):
     conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
-
     cur.execute("""
         INSERT INTO orcamentos (data_hora, cliente_nome, cliente_cnpj, tipo_cliente, estado, frete, tipo_pedido, vendedor_nome, vendedor_tel, vendedor_email, observacao)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -116,13 +113,42 @@ def carregar_orcamento_por_id(orcamento_id):
     return orc, confecc, bob
 
 # ============================
-# Formatação R$
+# Função de formatação R$
 # ============================
 def _format_brl(v):
     try:
         return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except Exception:
         return f"R$ {v}"
+
+# ============================
+# Inicialização DB
+# ============================
+init_db()
+
+# ============================
+# Configuração Streamlit
+# ============================
+st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", layout="centered")
+st.title("Orçamento - Grupo Locomotiva")
+
+# ============================
+# Menu
+# ============================
+menu = st.sidebar.selectbox("Menu", ["Novo Orçamento","Histórico de Orçamentos"], index=0, key="menu_selected")
+
+# ============================
+# Session State Defaults
+# ============================
+defaults = {
+    "Cliente_nome": "", "Cliente_CNPJ": "", "tipo_cliente": " ", "estado": None,
+    "tipo_pedido": "Direta", "preco_m2": 0.0, "itens_confeccionados": [],
+    "bobinas_adicionadas": [], "frete_sel": "CIF", "obs": "", 
+    "vend_nome": "", "vend_tel": "", "vend_email": ""
+}
+for k, v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
 # ============================
 # Cálculos (pequenas proteções)
@@ -616,7 +642,7 @@ if menu == "Novo Orçamento":
 st.markdown("🔒 Os dados acima são apenas para inclusão no orçamento (PDF ou impressão futura).")
 
 # ============================
-# Página de Histórico
+# Página Histórico
 # ============================
 if menu == "Histórico de Orçamentos":
     st.subheader("📋 Histórico de Orçamentos Salvos")
