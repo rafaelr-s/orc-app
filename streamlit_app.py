@@ -615,7 +615,6 @@ with col1:
         mime="application/pdf"
     )
 
-    
 # ============================
 # Histórico de Orçamentos (adicionado sem alterar funções originais)
 # ============================
