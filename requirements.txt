@@ -2,4 +2,3 @@ streamlit
 datetime
 pytz
 fpdf
-sqlite3
