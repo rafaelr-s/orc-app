@@ -599,18 +599,18 @@ with col1:
     # Salvar PDF no disco
     pdf_path = f"orcamento_{orcamento_id}.pdf"
     with open(pdf_path, "wb") as f:
-        f.write(pdf_buffer.getbuffer())
+        f.write(pdf_buffer)
+        st.success(f"PDF salvo em disco: {pdf_path}")
     
     st.success(f"PDF salvo em disco: {pdf_path}")
 
     # Botão para download
     st.download_button(
         "⬇️ Baixar PDF",
-        pdf_buffer,
+        data=pdf_buffer,
         file_name=pdf_path,
         mime="application/pdf"
     )
-
     
 # ============================
 # Histórico de Orçamentos (adicionado sem alterar funções originais)
