@@ -672,16 +672,16 @@ if menu == "Histórico de Orçamentos":
                     st.markdown("### ⬛ Itens Confeccionados")
                     for item in confecc:
                         st.markdown(
-                            f"- **{item[0]}**: {item[3]}x {item[1]:.2f}m x {item[2]:.2f}m | Cor: {item[4]}"
+                            f"- **{c[0]}**: {c[3]}x {c[1]:.2f}m x {c[2]:.2f}m | Cor: {c[4]}"
                         )
 
                 # Exibir itens bobinas
                 if bob:
                     st.markdown("### 🔘 Itens Bobinas")
                     for item in bob:
-                        esp = f" | Esp: {item[5]:.2f}mm" if item[5] else ""
+                        esp = f" | Esp: {b[5]:.2f}mm" if b[5] else ""
                         st.markdown(
-                            f"- **{item[0]}**: {item[3]}x {item[1]:.2f}m | Largura: {item[2]:.2f}m{esp} | Cor: {item[4]}"
+                            f"- **{b[0]}**: {b[3]}x {b[1]:.2f}m | Largura: {b[2]:.2f}m{esp} | Cor: {b[4]}"
                         )
 
                 # Botões em colunas
@@ -704,7 +704,7 @@ if menu == "Histórico de Orçamentos":
                             }
                             for b in bob
                         ]
-                        st.experimental_rerun()
+                        st.rerun()
 
                 with col2:
                     if os.path.exists(pdf_path):
@@ -731,4 +731,4 @@ if menu == "Histórico de Orçamentos":
                         if os.path.exists(pdf_path):
                             os.remove(pdf_path)
                         st.success(f"Orçamento ID {orc_id} excluído!")
-                        st.experimental_rerun()
+                        st.rerun()
