@@ -1,1 +1,6 @@
 streamlit
+datetime
+pytz
+FPDF
+BytesIO
+sqlite3
