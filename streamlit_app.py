@@ -2,8 +2,8 @@ import streamlit as st
 from datetime import datetime
 import pytz
 from fpdf import FPDF
-from io import BytesIO
 import sqlite3
+import os
 
 # ============================
 # Banco SQLite
@@ -121,7 +121,7 @@ def _format_brl(v):
     return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 # ============================
-# Função para gerar PDF
+# Função para gerar PDF (retorna bytes)
 # ============================
 def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_conf, resumo_bob, observacao, preco_m2, tipo_cliente="", estado=""):
     pdf = FPDF()
@@ -142,7 +142,7 @@ def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_con
     pdf.set_font("Arial", "B", 11)
     pdf.cell(0, 6, "Cliente", ln=True)
     pdf.set_font("Arial", size=10)
-    largura_util = pdf.w - 2*pdf.l_margin  # largura útil para multi_cell
+    largura_util = pdf.w - 2*pdf.l_margin
 
     for chave in ["nome", "cnpj", "tipo_cliente", "estado", "frete", "tipo_pedido"]:
         valor = str(cliente.get(chave, "") or "")
@@ -156,9 +156,8 @@ def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_con
         pdf.set_font("Arial", "B", 11)
         pdf.cell(0, 8, "Itens Confeccionados", ln=True)
         pdf.set_font("Arial", size=8)
-        for item in list(itens_confeccionados):
+        for item in itens_confeccionados:
             area_item = item['comprimento'] * item['largura'] * item['quantidade']
-            # Confeccionados seguem preço global (mantive comportamento original)
             valor_item = area_item * preco_m2
             txt = (
                 f"{item['quantidade']}x {item['produto']} - {item['comprimento']}m x {item['largura']}m "
@@ -167,6 +166,7 @@ def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_con
             pdf.multi_cell(largura_util, 6, txt)
             pdf.ln(1)
 
+    # Resumo Confeccionados
     if resumo_conf:
         m2_total, valor_bruto, valor_ipi, valor_final, valor_st, aliquota_st = resumo_conf
         pdf.ln(3)
@@ -176,17 +176,13 @@ def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_con
         pdf.cell(0, 8, f"Preço por m² utilizado: {_format_brl(preco_m2)}", ln=True)
         pdf.cell(0, 8, f"Área Total: {str(f'{m2_total:.2f}'.replace('.', ','))} m²", ln=True)
         pdf.cell(0, 8, f"Valor Bruto: {_format_brl(valor_bruto)}", ln=True)
-
-        if cliente.get("tipo_pedido") != "Industrialização":
+        if valor_ipi>0:
             pdf.cell(0, 8, f"IPI: {_format_brl(valor_ipi)}", ln=True)
-
-        if valor_st > 0:
+        if valor_st>0:
             pdf.cell(0, 8, f"ST ({aliquota_st}%): {_format_brl(valor_st)}", ln=True)
-
-        # Valor Final em negrito
         pdf.set_font("Arial", "B", 10)
-        pdf.cell(0, 8, f"Valor Total{(' + ST' if valor_st>0 else '')}: {_format_brl(valor_final)}", ln=True)
-        pdf.set_font("Arial", "", 10)  # volta para fonte normal
+        pdf.cell(0, 8, f"Valor Total: {_format_brl(valor_final)}", ln=True)
+        pdf.set_font("Arial", "", 10)
         pdf.ln(10)
 
     # Itens Bobinas
@@ -194,9 +190,8 @@ def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_con
         pdf.set_font("Arial", "B", 11)
         pdf.cell(0, 8, "Itens Bobina", ln=True)
         pdf.set_font("Arial", size=8)
-        for item in list(itens_bobinas):
+        for item in itens_bobinas:
             metros_item = item['comprimento'] * item['quantidade']
-            # Usa preco_unitario se existir (fixado por espessura), senão usa preco_m2 global
             preco_item = item.get('preco_unitario', preco_m2)
             valor_item = metros_item * preco_item
             txt = (
@@ -216,20 +211,14 @@ def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_con
             pdf.set_font("Arial", "B", 11)
             pdf.cell(0, 10, "Resumo - Bobinas", ln=True)
             pdf.set_font("Arial", "", 10)
-            if not any("espessura" in item for item in itens_bobinas):
-                pdf.cell(0, 8, f"Preço por metro linear utilizado: {_format_brl(preco_m2)}", ln=True)
             pdf.cell(0, 8, f"Total de Metros Lineares: {str(f'{m_total:.2f}'.replace('.', ','))} m", ln=True)
             pdf.cell(0, 8, f"Valor Bruto: {_format_brl(valor_bruto)}", ln=True)
-            
-            if cliente.get("tipo_pedido") != "Industrialização":
+            if valor_ipi>0:
                 pdf.cell(0, 8, f"IPI: {_format_brl(valor_ipi)}", ln=True)
-            
             pdf.set_font("Arial", "B", 10)
             pdf.cell(0, 8, f"Valor Total: {_format_brl(valor_final)}", ln=True)
-        else:
-            pdf.cell(0, 8, f"Valor Total com IPI: {_format_brl(valor_final)}", ln=True)
-            pdf.ln(10)
-        
+        pdf.ln(10)
+
     # Observações
     if observacao:
         pdf.set_font("Arial", "B", 11)
@@ -249,12 +238,9 @@ def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_con
         pdf.multi_cell(largura_util, 8, vendedor_txt)
         pdf.ln(5)
 
-    # ====== IMPORTANTE ======
-    # Retorna o PDF como buffer
-    buffer = BytesIO()
-    pdf.output(buffer)
-    buffer.seek(0)
-    return buffer
+    # Retorna bytes do PDF
+    pdf_bytes = pdf.output(dest='S').encode('latin1')
+    return pdf_bytes
 
 # ============================
 # Inicialização
@@ -266,7 +252,7 @@ if "bobinas_adicionadas" not in st.session_state:
     st.session_state["bobinas_adicionadas"] = []
 
 # ============================
-# Streamlit UI
+# Configuração Streamlit
 # ============================
 st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", layout="centered")
 st.title("Orçamento - Grupo Locomotiva")
@@ -563,7 +549,7 @@ with col1:
         "cnpj": Cliente_CNPJ,
         "tipo_cliente": tipo_cliente,
         "estado": estado,
-        "frete": "CIF",
+        "frete": frete,
         "tipo_pedido": tipo_pedido
     }
     vendedor = {"nome": vendedor_nome, "tel": vendedor_tel, "email": vendedor_email}
@@ -578,7 +564,7 @@ with col1:
     )
     st.success(f"Orçamento salvo com ID {orcamento_id}")
 
-    # ====== Corrigir chamada gerar_pdf ======
+    # Calcular resumos
     resumo_conf = None
     resumo_bob = None
     if st.session_state["itens_confeccionados"]:
@@ -596,37 +582,93 @@ with col1:
             tipo_pedido
         )
 
+    # Gerar PDF
     pdf_buffer = gerar_pdf(
         cliente, 
         vendedor, 
         st.session_state["itens_confeccionados"], 
         st.session_state["bobinas_adicionadas"], 
-        resumo_conf,          
-        resumo_bob,           
+        resumo_conf,
+        resumo_bob,
         Observacao, 
         preco_m2,
         tipo_cliente=tipo_cliente,
         estado=estado
     )
-    st.download_button("⬇️ Baixar PDF", pdf_buffer, file_name="orcamento.pdf", mime="application/pdf")
+
+    # Salvar PDF no disco
+    pdf_path = f"orcamento_{orcamento_id}.pdf"
+    with open(pdf_path, "wb") as f:
+        f.write(pdf_buffer.getbuffer())
+    
+    st.success(f"PDF salvo em disco: {pdf_path}")
+
+    # Botão para download
+    st.download_button(
+        "⬇️ Baixar PDF",
+        pdf_buffer,
+        file_name=pdf_path,
+        mime="application/pdf"
+    )
 
     
 # ============================
 # Histórico de Orçamentos (adicionado sem alterar funções originais)
 # ============================
-if menu=="Histórico de Orçamentos":
+if menu == "Histórico de Orçamentos":
     st.subheader("📋 Histórico de Orçamentos")
+
     orcamentos = buscar_orcamentos()
-    for o in orcamentos:
-        st.write(f"ID {o[0]} | Data: {o[1]} | Cliente: {o[2]} | Vendedor: {o[3]}")
-        if st.button(f"🔄 Reabrir ID {o[0]}", key=f"reabrir_{o[0]}"):
-            orc, confecc, bob = carregar_orcamento_por_id(o[0])
-            st.session_state["itens_confeccionados"] = [{"produto":c[0],"comprimento":c[1],"largura":c[2],"quantidade":c[3],"cor":c[4]} for c in confecc]
-            st.session_state["bobinas_adicionadas"] = [{"produto":b[0],"comprimento":b[1],"largura":b[2],"quantidade":b[3],"cor":b[4],"espessura":b[5],"preco_unitario":b[6]} for b in bob]
-            st.rerun()
-        
-        # Botão para reabrir orçamento
-        if st.button(f"🔄 Reabrir ID {o[0]}", key=f"reabrir_{o[0]}"):
-            st.session_state["itens_confeccionados"] = [{"produto":c[0],"comprimento":c[1],"largura":c[2],"quantidade":c[3],"cor":c[4]} for c in confecc]
-            st.session_state["bobinas_adicionadas"] = [{"produto":b[0],"comprimento":b[1],"largura":b[2],"quantidade":b[3],"cor":b[4],"espessura":b[5],"preco_unitario":b[6]} for b in bob]
-            st.rerun()
+    if not orcamentos:
+        st.info("Nenhum orçamento encontrado.")
+    else:
+        for o in orcamentos:
+            orc_id, data_hora, cliente_nome, vendedor_nome = o
+            pdf_path = f"orcamento_{orc_id}.pdf"
+
+            # Expander colorido e com ícones
+            with st.expander(f"📝 Orçamento ID {orc_id} - {cliente_nome}"):
+                st.markdown(f"**📅 Data:** {data_hora}")
+                st.markdown(f"**👤 Cliente:** {cliente_nome}")
+                st.markdown(f"**🗣️ Vendedor:** {vendedor_nome}")
+
+                # Carregar itens do orçamento para exibição visual
+                orc, confecc, bob = carregar_orcamento_por_id(orc_id)
+                if confecc:
+                    st.markdown("### ⬛ Itens Confeccionados")
+                    for item in confecc:
+                        st.markdown(
+                            f"- **{item[0]}**: {item[3]}x {item[1]:.2f}m x {item[2]:.2f}m | Cor: {item[4]}"
+                        )
+                if bob:
+                    st.markdown("### 🔘 Itens Bobinas")
+                    for item in bob:
+                        esp = f" | Esp: {item[5]:.2f}mm" if item[5] else ""
+                        st.markdown(
+                            f"- **{item[0]}**: {item[3]}x {item[1]:.2f}m | Largura: {item[2]:.2f}m{esp} | Cor: {item[4]}"
+                        )
+
+                # Botões em colunas
+                col1, col2 = st.columns([1,1])
+                with col1:
+                    if st.button(f"🔄 Reabrir", key=f"reabrir_{orc_id}"):
+                        st.session_state["itens_confeccionados"] = [
+                            {"produto": c[0],"comprimento": c[1],"largura": c[2],"quantidade": c[3],"cor": c[4]}
+                            for c in confecc
+                        ]
+                        st.session_state["bobinas_adicionadas"] = [
+                            {"produto": b[0],"comprimento": b[1],"largura": b[2],"quantidade": b[3],
+                             "cor": b[4],"espessura": b[5],"preco_unitario": b[6]} for b in bob
+                        ]
+                        st.rerun()
+                with col2:
+                    if os.path.exists(pdf_path):
+                        with open(pdf_path, "rb") as f:
+                            st.download_button(
+                                f"⬇️ Baixar PDF",
+                                f,
+                                file_name=pdf_path,
+                                mime="application/pdf"
+                            )
+                    else:
+                        st.warning("PDF ainda não gerado.")
