@@ -554,14 +554,62 @@ with col1:
     with col2:
         vendedor_email = st.text_input("E-mail")
 
+# ============================ 
+# Botões PDF e Salve 
+# ============================   
     if st.button("📄 Gerar PDF e Salvar Orçamento"):
-        cliente = {"nome":Cliente_nome,"cnpj":Cliente_CNPJ,"tipo_cliente":tipo_cliente,"estado":estado,"frete":"CIF","tipo_pedido":tipo_pedido}
-        vendedor = {"nome":vendedor_nome,"tel":vendedor_tel,"email":vendedor_email}
-        orcamento_id = salvar_orcamento(cliente, vendedor, st.session_state["itens_confeccionados"], st.session_state["bobinas_adicionadas"], Observacao)
-        st.success(f"Orçamento salvo com ID {orcamento_id}")
-        pdf_buffer = gerar_pdf(cliente, vendedor, st.session_state["itens_confeccionados"], st.session_state["bobinas_adicionadas"], Observacao, preco_m2)
-        st.download_button("⬇️ Baixar PDF", pdf_buffer, file_name="orcamento.pdf", mime="application/pdf")
+    cliente = {
+        "nome": Cliente_nome,
+        "cnpj": Cliente_CNPJ,
+        "tipo_cliente": tipo_cliente,
+        "estado": estado,
+        "frete": "CIF",
+        "tipo_pedido": tipo_pedido
+    }
+    vendedor = {"nome": vendedor_nome, "tel": vendedor_tel, "email": vendedor_email}
 
+    # Salvar orçamento no banco
+    orcamento_id = salvar_orcamento(
+        cliente, 
+        vendedor, 
+        st.session_state["itens_confeccionados"], 
+        st.session_state["bobinas_adicionadas"], 
+        Observacao
+    )
+    st.success(f"Orçamento salvo com ID {orcamento_id}")
+
+    # ====== Corrigir chamada gerar_pdf ======
+    resumo_conf = None
+    resumo_bob = None
+    if st.session_state["itens_confeccionados"]:
+        resumo_conf = calcular_valores_confeccionados(
+            st.session_state["itens_confeccionados"], 
+            preco_m2, 
+            tipo_cliente, 
+            estado, 
+            tipo_pedido
+        )
+    if st.session_state["bobinas_adicionadas"]:
+        resumo_bob = calcular_valores_bobinas(
+            st.session_state["bobinas_adicionadas"], 
+            preco_m2, 
+            tipo_pedido
+        )
+
+    pdf_buffer = gerar_pdf(
+        cliente, 
+        vendedor, 
+        st.session_state["itens_confeccionados"], 
+        st.session_state["bobinas_adicionadas"], 
+        resumo_conf,          # <- corrigido
+        resumo_bob,           # <- corrigido
+        Observacao, 
+        preco_m2,
+        tipo_cliente=tipo_cliente,
+        estado=estado
+    )
+    st.download_button("⬇️ Baixar PDF", pdf_buffer, file_name="orcamento.pdf", mime="application/pdf")
+    
 # ============================
 # Histórico de Orçamentos (adicionado sem alterar funções originais)
 # ============================
