@@ -363,11 +363,10 @@ init_db()
 st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", layout="centered")
 st.title("Orçamento - Grupo Locomotiva")
 
-# Menu lateral
 menu = st.sidebar.selectbox(
     "Menu",
     ["Novo Orçamento", "Histórico de Orçamentos"],
-    index=0 if st.session_state.get("menu_selected", "Novo Orçamento")=="Novo Orçamento" else 1,
+    index=0 if st.session_state.get("menu_selected", "Novo Orçamento") == "Novo Orçamento" else 1,
     key="menu_selected"
 )
 
@@ -740,33 +739,53 @@ if menu == "Histórico de Orçamentos":
                     col1, col2 = st.columns([1,1])
                     with col1:
                         if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
-                            if orc:
-                                # Atualiza session_state com dados do orçamento
-                                st.session_state.update({
-                                    "Cliente_nome": orc[2] or "",
-                                    "Cliente_CNPJ": orc[3] or "",
-                                    "tipo_cliente": orc[4] or " ",
-                                    "estado": orc[5] or list(icms_por_estado.keys())[0],
-                                    "frete_sel": orc[6] or "CIF",
-                                    "tipo_pedido": orc[7] or "Direta",
-                                    "vend_nome": orc[8] or "",
-                                    "vend_tel": orc[9] or "",
-                                    "vend_email": orc[10] or "",
-                                    "obs": orc[11] or "",
-                                    "itens_confeccionados": [
-                                        {"produto": c[0], "comprimento": float(c[1]), "largura": float(c[2]),
-                                         "quantidade": int(c[3]), "cor": c[4] or ""} for c in confecc
-                                    ] if confecc else [],
-                                    "bobinas_adicionadas": [
-                                        {"produto": b[0], "comprimento": float(b[1]), "largura": float(b[2]),
-                                         "quantidade": int(b[3]), "cor": b[4] or "",
-                                         "espessura": float(b[5]) if b[5] is not None else None,
-                                         "preco_unitario": float(b[6]) if b[6] is not None else None} for b in bob
-                                    ] if bob else [],
-                                    "menu_selected": "Novo Orçamento"
-                                })
-                                st.experimental_rerun()
+                            orc, confecc, bob = carregar_orcamento_por_id(orc_id)
+                            if not orc:
+                                st.error("Orçamento não encontrado.")
+                            else:
+                                # Mapeamento BD -> session_state
+                                st.session_state["Cliente_nome"] = orc[2] or ""
+                                st.session_state["Cliente_CNPJ"] = orc[3] or ""
+                                st.session_state["tipo_cliente"] = orc[4] or " "
+                                st.session_state["estado"] = orc[5] or list(icms_por_estado.keys())[0]
+                                st.session_state["frete_sel"] = orc[6] or "CIF"
+                                st.session_state["tipo_pedido"] = orc[7] or "Direta"
+                                st.session_state["vend_nome"] = orc[8] or ""
+                                st.session_state["vend_tel"] = orc[9] or ""
+                                st.session_state["vend_email"] = orc[10] or ""
+                                st.session_state["obs"] = orc[11] or ""
+                                st.session_state["preco_m2"] = orc[12] or 0.0  # <<< preço salvo
 
+        # Itens confeccionados
+        st.session_state["itens_confeccionados"] = [
+            {
+                "produto": c[0],
+                "comprimento": float(c[1]),
+                "largura": float(c[2]),
+                "quantidade": int(c[3]),
+                "cor": c[4] or "",
+            }
+            for c in confecc
+        ] if confecc else []
+
+        # Itens bobinas
+        st.session_state["bobinas_adicionadas"] = [
+            {
+                "produto": b[0],
+                "comprimento": float(b[1]),
+                "largura": float(b[2]),
+                "quantidade": int(b[3]),
+                "cor": b[4] or "",
+                "espessura": float(b[5]) if b[5] is not None else None,
+                "preco_unitario": float(b[6]) if b[6] is not None else None,
+            }
+            for b in bob
+        ] if bob else []
+
+        # Força a navegação para "Novo Orçamento"
+        st.session_state["menu_selected"] = "Novo Orçamento"
+        st.experimental_rerun()
+        
                     with col2:
                         if os.path.exists(pdf_path):
                             with open(pdf_path, "rb") as f:
