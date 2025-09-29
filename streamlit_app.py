@@ -786,18 +786,18 @@ if menu == "Histórico de Orçamentos":
         st.session_state["menu_selected"] = "Novo Orçamento"
         st.experimental_rerun()
         
-                    with col2:
-                        if os.path.exists(pdf_path):
-                            with open(pdf_path, "rb") as f:
-                                st.download_button(
-                                    "⬇️ Baixar PDF",
-                                    f,
-                                    file_name=pdf_path,
-                                    mime="application/pdf",
-                                    key=f"download_{orc_id}"
-                                )
-                        else:
-                            st.warning("PDF ainda não gerado.")
+        with col2:
+            if os.path.exists(pdf_path):
+                with open(pdf_path, "rb") as f:
+                    st.download_button(
+                        "⬇️ Baixar PDF",
+                        f,
+                        file_name=pdf_path,
+                        mime="application/pdf",
+                        key=f"download_{orc_id}"
+                    )
+            else:
+                st.warning("PDF ainda não gerado.")
 
             # Botão exportar Excel (fora do loop)
             excel_file = exportar_excel(orcamentos)
