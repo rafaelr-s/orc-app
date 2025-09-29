@@ -363,10 +363,16 @@ init_db()
 st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", layout="centered")
 st.title("Orçamento - Grupo Locomotiva")
 
+# ============================
+# Controle do Menu
+# ============================
+if "menu_selected" not in st.session_state:
+    st.session_state["menu_selected"] = "Novo Orçamento"
+
 menu = st.sidebar.selectbox(
     "Menu",
     ["Novo Orçamento", "Histórico de Orçamentos"],
-    index=0 if st.session_state.get("menu_selected", "Novo Orçamento") == "Novo Orçamento" else 1,
+    index=0 if st.session_state["menu_selected"] == "Novo Orçamento" else 1,
     key="menu_selected"
 )
 
@@ -784,7 +790,7 @@ if menu == "Histórico de Orçamentos":
 
         # Força a navegação para "Novo Orçamento"
         st.session_state["menu_selected"] = "Novo Orçamento"
-        st.experimental_rerun()
+        st.rerun()
         
         with col2:
             if os.path.exists(pdf_path):
