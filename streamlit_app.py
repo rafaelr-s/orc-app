@@ -406,7 +406,7 @@ if st.button("🧹 Limpar Tela"):
         "tipo_pedido": "Direta", "preco_m2": 0.0, "itens_confeccionados": [], "bobinas_adicionadas": [],
         "frete_sel": "CIF", "obs": "", "vend_nome": "", "vend_tel": "", "vend_email": ""
     })
-    st.experimental_rerun()
+    st.rerun()
 
 if menu == "Novo Orçamento":
     brasilia_tz = pytz.timezone("America/Sao_Paulo")
