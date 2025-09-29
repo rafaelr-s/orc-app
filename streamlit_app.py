@@ -366,7 +366,9 @@ st.title("Orçamento - Grupo Locomotiva")
 # Menu lateral
 menu = st.sidebar.selectbox(
     "Menu",
-    ["Novo Orçamento", "Histórico de Orçamentos"]
+    ["Novo Orçamento", "Histórico de Orçamentos"],
+    index=0 if st.session_state.get("menu_selected", "Novo Orçamento")=="Novo Orçamento" else 1,
+    key="menu_selected"
 )
 
 # Session state defaults
@@ -398,6 +400,15 @@ st_por_estado = {
 # ============================
 # Interface - Novo Orçamento
 # ============================
+if st.button("🧹 Limpar Tela"):
+    # Resetar todos os session_state
+    st.session_state.update({
+        "Cliente_nome": "", "Cliente_CNPJ": "", "tipo_cliente": " ", "estado": None,
+        "tipo_pedido": "Direta", "preco_m2": 0.0, "itens_confeccionados": [], "bobinas_adicionadas": [],
+        "frete_sel": "CIF", "obs": "", "vend_nome": "", "vend_tel": "", "vend_email": ""
+    })
+    st.experimental_rerun()
+
 if menu == "Novo Orçamento":
     brasilia_tz = pytz.timezone("America/Sao_Paulo")
     data_hora_brasilia = datetime.now(brasilia_tz).strftime("%d/%m/%Y %H:%M")
@@ -737,9 +748,8 @@ if menu == "Histórico de Orçamentos":
                     col1, col2, col3 = st.columns([1,1,1])
                     with col1:
                         if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
-                            # Carregar dados do orçamento e preencher session_state
                             if orc:
-                                # orc indices: 0:id,1:data_hora,2:cliente_nome,3:cliente_cnpj,4:tipo_cliente,5:estado,6:frete,7:tipo_pedido,8:vendedor_nome,9:vendedor_tel,10:vendedor_email,11:observacao
+                                # Atualiza session_state com dados do orçamento
                                 st.session_state["Cliente_nome"] = orc[2] or ""
                                 st.session_state["Cliente_CNPJ"] = orc[3] or ""
                                 st.session_state["tipo_cliente"] = orc[4] or " "
@@ -751,32 +761,23 @@ if menu == "Histórico de Orçamentos":
                                 st.session_state["vend_email"] = orc[10] or ""
                                 st.session_state["obs"] = orc[11] or ""
 
-                            # colocar itens em session_state (confeccionados e bobinas)
-                            st.session_state["itens_confeccionados"] = [
-                                {"produto": c[0], "comprimento": float(c[1]), "largura": float(c[2]), "quantidade": int(c[3]), "cor": c[4] or ""}
-                                for c in confecc
-                            ] if confecc else []
+    # Itens
+    st.session_state["itens_confeccionados"] = [
+        {"produto": c[0], "comprimento": float(c[1]), "largura": float(c[2]), "quantidade": int(c[3]), "cor": c[4] or ""}
+        for c in confecc
+    ] if confecc else []
 
-                            st.session_state["bobinas_adicionadas"] = [
-                                {
-                                    "produto": b[0],
-                                    "comprimento": float(b[1]),
-                                    "largura": float(b[2]),
-                                    "quantidade": int(b[3]),
-                                    "cor": b[4] or "",
-                                    "espessura": float(b[5]) if (b[5] is not None) else None,
-                                    "preco_unitario": float(b[6]) if (b[6] is not None) else None
-                                }
-                                for b in bob
-                            ] if bob else []
+    st.session_state["bobinas_adicionadas"] = [
+        {"produto": b[0], "comprimento": float(b[1]), "largura": float(b[2]), "quantidade": int(b[3]),
+         "cor": b[4] or "", "espessura": float(b[5]) if (b[5] is not None) else None,
+         "preco_unitario": float(b[6]) if (b[6] is not None) else None}
+        for b in bob
+    ] if bob else []
 
-                            # jump back to 'Novo Orçamento' tab and rerun to update widgets
-                            # (we set menu in session_state so next rerun opens that page)
-                            st.session_state["menu_selected"] = "Novo Orçamento"
-                            # Try to set sidebar selection by rerunning; Streamlit doesn't allow programmatic change of selectbox value,
-                            # so we simulate by telling user to click back OR we simply rerun and rely on our session_state
-                            st.success("Orçamento reaberto no formulário. Verifique os campos na aba 'Novo Orçamento'.")
-                            st.rerun()
+    # Força o menu a abrir "Novo Orçamento"
+    st.session_state["menu_selected"] = "Novo Orçamento"
+    st.experimental_rerun()  # força atualização imediata da página
+
 
                     with col2:
                         if os.path.exists(pdf_path):
