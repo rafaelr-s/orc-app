@@ -65,7 +65,7 @@ def exportar_excel(orcamentos):
     return output
 
 # ============================
-# Funções de Banco de Dados
+# Banco SQLite
 # ============================
 def init_db():
     conn = sqlite3.connect("orcamentos.db")
@@ -118,6 +118,7 @@ def init_db():
 def salvar_orcamento(cliente, vendedor, itens_confeccionados, itens_bobinas, observacao):
     conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
+
     cur.execute("""
         INSERT INTO orcamentos (data_hora, cliente_nome, cliente_cnpj, tipo_cliente, estado, frete, tipo_pedido, vendedor_nome, vendedor_tel, vendedor_email, observacao)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -173,7 +174,7 @@ def carregar_orcamento_por_id(orcamento_id):
     return orc, confecc, bob
 
 # ============================
-# Função de formatação R$
+# Formatação R$
 # ============================
 def _format_brl(v):
     try:
@@ -184,7 +185,7 @@ def _format_brl(v):
 # ============================
 # Cálculos (pequenas proteções)
 # ============================
-st_por_estado = {}
+st_por_estado = {}  # declarado cedo, depois definido mais abaixo
 
 def calcular_valores_confeccionados(itens, preco_m2, tipo_cliente="", estado="", tipo_pedido="Direta"):
     if not itens:
@@ -212,19 +213,16 @@ def calcular_valores_confeccionados(itens, preco_m2, tipo_cliente="", estado="",
 def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
     if not itens:
         return 0.0, 0.0, 0.0, 0.0
-
-    produtos_sem_ipi = ["Acrylic", "Agora", "Tela de Sombreamento", "Encerado"]
-
+    # m_total: soma dos metros (comprimento * quantidade)
     m_total = sum(item['comprimento'] * item['quantidade'] for item in itens)
-
+    # valor bruto: usar preco_unitario se NÃO for None, senão usar preco_m2
     def preco_item_of(item):
-        pu = item.get('preco_unitario')
+        pu = item.get('preco_unitario')  # pode ser None
         return pu if (pu is not None) else preco_m2
 
     valor_bruto = sum((item['comprimento'] * item['quantidade']) * preco_item_of(item) for item in itens)
 
-    # Verifica se algum item está isento de IPI
-    if tipo_pedido == "Industrialização" or all(item['produto'] in produtos_sem_ipi for item in itens):
+    if tipo_pedido == "Industrialização":
         valor_ipi = 0
         valor_final = valor_bruto
     else:
@@ -236,7 +234,7 @@ def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
 # ============================
 # Função para gerar PDF (retorna bytes)
 # ============================
-def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_conf, resumo_bob, observacao, preco_m2, tipo_cliente="", estado=""):
+def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_conf, resumo_bob, observacao, preco_m2, tipo_cliente="", estado=""):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -246,7 +244,6 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
     pdf.cell(0, 12, "Orçamento - Grupo Locomotiva", ln=True, align="C")
     pdf.ln(10)
     pdf.set_font("Arial", size=9)
-    pdf.cell(0, 10, f"Orçamento ID: {orcamento_id}", ln=True)
     brasilia_tz = pytz.timezone("America/Sao_Paulo")
     pdf.cell(0, 6, f"Data e Hora: {datetime.now(brasilia_tz).strftime('%d/%m/%Y %H:%M')}", ln=True)
     pdf.cell(0, 6, "Validade da Cotação: 7 dias corridos.", ln=True, align="L")
@@ -359,31 +356,36 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
 # ============================
 # Inicialização
 # ============================
-st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", layout="centered")
-st.title("Orçamento - Grupo Locomotiva")
 init_db()
 
-if "menu_selected" not in st.session_state:
-    st.session_state["menu_selected"] = "Novo Orçamento"
-
-menu = st.sidebar.radio(
-    "Menu",
-    ["Novo Orçamento", "Histórico de Orçamentos"],
-    index=0 if st.session_state["menu_selected"] == "Novo Orçamento" else 1
-)
-st.session_state["menu_selected"] = menu
-
-# ============================
-# Session State Defaults
-# ============================
+# session state defaults for form fields (so reabrir can populate)
 defaults = {
-    "Cliente_nome": "", "Cliente_CNPJ": "", "tipo_cliente": " ", "estado": None,
-    "tipo_pedido": "Direta", "preco_m2": 0.0, "itens_confeccionados": [], "bobinas_adicionadas": [],
-    "frete_sel": "CIF", "obs": "", "vend_nome": "", "vend_tel": "", "vend_email": ""
+    "Cliente_nome": "",
+    "Cliente_CNPJ": "",
+    "tipo_cliente": " ",
+    "estado": None,
+    "tipo_pedido": "Direta",
+    "preco_m2": 0.0,
+    "itens_confeccionados": [],
+    "bobinas_adicionadas": [],
+    "frete_sel": "CIF",
+    "obs": "",
+    "vend_nome": "",
+    "vend_tel": "",
+    "vend_email": ""
 }
 for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
+
+# ============================
+# Configuração Streamlit
+# ============================
+st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", layout="centered")
+st.title("Orçamento - Grupo Locomotiva")
+
+# --- Menu ---
+menu = st.sidebar.selectbox("Menu", ["Novo Orçamento","Histórico de Orçamentos"], index=0)
 
 # ICMS e ST
 icms_por_estado = {
