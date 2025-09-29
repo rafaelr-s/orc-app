@@ -672,10 +672,10 @@ st.markdown("🔒 Os dados acima são apenas para inclusão no orçamento (PDF o
 
 
 # ============================
-# Página Histórico
+# Página de Histórico
 # ============================
 if menu == "Histórico de Orçamentos":
-    st.subheader("📋 Histórico de Orçamentos")
+    st.subheader("📋 Histórico de Orçamentos Salvos")
 
     orcamentos = buscar_orcamentos()
     if not orcamentos:
@@ -719,7 +719,6 @@ if menu == "Histórico de Orçamentos":
 
                     orc, confecc, bob = carregar_orcamento_por_id(orc_id)
 
-                    # Mostrar itens no histórico
                     if confecc:
                         st.markdown("### ⬛ Itens Confeccionados")
                         for c in confecc:
@@ -734,12 +733,13 @@ if menu == "Histórico de Orçamentos":
                             st.markdown(
                                 f"- **{b[0]}**: {b[3]}x {b[1]:.2f}m | Largura: {b[2]:.2f}m{esp} | Cor: {b[4]}"
                             )
-                            
-                col1, col2 = st.columns([1,1])
-                with col1:
+
+                    col1, col2, col3 = st.columns([1,1,1])
+                    with col1:
                         if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
+                            # Carregar dados do orçamento e preencher session_state
                             if orc:
-                                # Preencher dados do cliente e vendedor
+                                # orc indices: 0:id,1:data_hora,2:cliente_nome,3:cliente_cnpj,4:tipo_cliente,5:estado,6:frete,7:tipo_pedido,8:vendedor_nome,9:vendedor_tel,10:vendedor_email,11:observacao
                                 st.session_state["Cliente_nome"] = orc[2] or ""
                                 st.session_state["Cliente_CNPJ"] = orc[3] or ""
                                 st.session_state["tipo_cliente"] = orc[4] or " "
@@ -751,56 +751,59 @@ if menu == "Histórico de Orçamentos":
                                 st.session_state["vend_email"] = orc[10] or ""
                                 st.session_state["obs"] = orc[11] or ""
 
-                                # Itens Confeccionados
-                                st.session_state["itens_confeccionados"] = [
-                                    {
-                                        "produto": c[0],
-                                        "comprimento": float(c[1]),
-                                        "largura": float(c[2]),
-                                        "quantidade": int(c[3]),
-                                        "cor": c[4] or "",
-                                        "preco_unitario": c[5] if len(c) > 5 and c[5] is not None else st.session_state.get("preco_m2",0.0)
-                                    }
-                                    for c in confecc
-                                ] if confecc else []
+                            # colocar itens em session_state (confeccionados e bobinas)
+                            st.session_state["itens_confeccionados"] = [
+                                {"produto": c[0], "comprimento": float(c[1]), "largura": float(c[2]), "quantidade": int(c[3]), "cor": c[4] or ""}
+                                for c in confecc
+                            ] if confecc else []
 
-                                # Itens Bobinas
-                                st.session_state["bobinas_adicionadas"] = [
-                                    {
-                                        "produto": b[0],
-                                        "comprimento": float(b[1]),
-                                        "largura": float(b[2]),
-                                        "quantidade": int(b[3]),
-                                        "cor": b[4] or "",
-                                        "espessura": float(b[5]) if (b[5] is not None) else None,
-                                        "preco_unitario": float(b[6]) if (b[6] is not None) else st.session_state.get("preco_m2",0.0)
-                                    }
-                                    for b in bob
-                                ] if bob else []
+                            st.session_state["bobinas_adicionadas"] = [
+                                {
+                                    "produto": b[0],
+                                    "comprimento": float(b[1]),
+                                    "largura": float(b[2]),
+                                    "quantidade": int(b[3]),
+                                    "cor": b[4] or "",
+                                    "espessura": float(b[5]) if (b[5] is not None) else None,
+                                    "preco_unitario": float(b[6]) if (b[6] is not None) else None
+                                }
+                                for b in bob
+                            ] if bob else []
 
-                                # Preencher preço do orçamento
-                                if st.session_state["itens_confeccionados"]:
-                                    st.session_state["preco_m2"] = st.session_state["itens_confeccionados"][0].get("preco_unitario",0.0)
-                                elif st.session_state["bobinas_adicionadas"]:
-                                    st.session_state["preco_m2"] = st.session_state["bobinas_adicionadas"][0].get("preco_unitario",0.0)
-                                else:
-                                    st.session_state["preco_m2"] = 0.0
+                            # jump back to 'Novo Orçamento' tab and rerun to update widgets
+                            # (we set menu in session_state so next rerun opens that page)
+                            st.session_state["menu_selected"] = "Novo Orçamento"
+                            # Try to set sidebar selection by rerunning; Streamlit doesn't allow programmatic change of selectbox value,
+                            # so we simulate by telling user to click back OR we simply rerun and rely on our session_state
+                            st.success("Orçamento reaberto no formulário. Verifique os campos na aba 'Novo Orçamento'.")
+                            st.rerun()
 
-                                # Forçar a tela "Novo Orçamento"
-                                st.experimental_rerun()
-                                
-                                with col2:
-                                    if os.path.exists(pdf_path):
-                                        with open(pdf_path, "rb") as f:
-                                            st.download_button(
-                                                "⬇️ Baixar PDF",
-                                                f,
-                                                file_name=pdf_path,
-                                                mime="application/pdf",
-                                                key=f"download_{orc_id}"
-                                            )
-                                    else:
-                                        st.warning("PDF ainda não gerado.")
+                    with col2:
+                        if os.path.exists(pdf_path):
+                            with open(pdf_path, "rb") as f:
+                                st.download_button(
+                                    "⬇️ Baixar PDF",
+                                    f,
+                                    file_name=pdf_path,
+                                    mime="application/pdf",
+                                    key=f"download_{orc_id}"
+                                )
+                        else:
+                            st.warning("PDF ainda não gerado.")
+
+                    with col3:
+                        if st.button("❌ Excluir", key=f"excluir_{orc_id}"):
+                            conn = sqlite3.connect("orcamentos.db")
+                            cur = conn.cursor()
+                            cur.execute("DELETE FROM orcamentos WHERE id=?", (orc_id,))
+                            cur.execute("DELETE FROM itens_confeccionados WHERE orcamento_id=?", (orc_id,))
+                            cur.execute("DELETE FROM itens_bobinas WHERE orcamento_id=?", (orc_id,))
+                            conn.commit()
+                            conn.close()
+                            if os.path.exists(pdf_path):
+                                os.remove(pdf_path)
+                            st.success(f"Orçamento ID {orc_id} excluído!")
+                            st.rerun()
 
             # Novo botão: exportar relatório Excel
             excel_file = exportar_excel(orcamentos)
