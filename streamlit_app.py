@@ -750,6 +750,11 @@ if menu == "Histórico de Orçamentos":
                     col1, col2 = st.columns([1,1])
                     with col1:
                         if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
+                            st.session_state["reabrir_orcamento_id"] = orc_id
+
+                            if "reabrir_orcamento_id" in st.session_state:
+                                orc_id = st.session_state.pop("reabrir_orcamento_id")  # remove a flag
+                                orc, confecc, bob = carregar_orcamento_por_id(orc_id)
                             if orc:
                                 # Preencher dados do cliente e vendedor
                                 st.session_state["Cliente_nome"] = orc[2] or ""
