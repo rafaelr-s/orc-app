@@ -369,12 +369,15 @@ st.title("Orçamento - Grupo Locomotiva")
 if "menu_selected" not in st.session_state:
     st.session_state["menu_selected"] = "Novo Orçamento"
 
-menu = st.sidebar.selectbox(
+# O selectbox usa uma variável auxiliar, não mexe no session_state diretamente
+menu_choice = st.sidebar.selectbox(
     "Menu",
     ["Novo Orçamento", "Histórico de Orçamentos"],
-    index=0 if st.session_state["menu_selected"] == "Novo Orçamento" else 1,
-    key="menu_selected"
+    index=0 if st.session_state["menu_selected"] == "Novo Orçamento" else 1
 )
+
+# Sincroniza com o session_state
+st.session_state["menu_selected"] = menu_choice
 
 # Session state defaults
 defaults = {
