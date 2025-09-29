@@ -244,6 +244,12 @@ init_db()
 st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", layout="centered")
 st.title("Orçamento - Grupo Locomotiva")
 
+# Menu lateral
+menu = st.sidebar.selectbox(
+    "Menu",
+    ["Novo Orçamento", "Histórico de Orçamentos"]
+)
+
 # Session state defaults
 defaults = {
     "Cliente_nome": "", "Cliente_CNPJ": "", "tipo_cliente": " ", "estado": None,
