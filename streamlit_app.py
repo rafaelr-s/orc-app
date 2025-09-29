@@ -236,7 +236,7 @@ def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
 # ============================
 # Função para gerar PDF (retorna bytes)
 # ============================
-def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_conf, resumo_bob, observacao, preco_m2, tipo_cliente="", estado=""):
+def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_conf, resumo_bob, observacao, preco_m2, tipo_cliente="", estado=""):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -653,6 +653,7 @@ if menu == "Novo Orçamento":
 
         # Gerar PDF bytes
         pdf_bytes = gerar_pdf(
+            orcamento_id,
             cliente,
             vendedor,
             st.session_state["itens_confeccionados"],
@@ -687,12 +688,10 @@ st.markdown("🔒 Os dados acima são apenas para inclusão no orçamento (PDF o
 # ============================
 if menu == "Histórico de Orçamentos":
     st.subheader("📋 Histórico de Orçamentos Salvos")
-
     orcamentos = buscar_orcamentos()
     if not orcamentos:
         st.info("Nenhum orçamento encontrado.")
     else:
-        # filtros simples
         clientes = sorted(list({o[2] for o in orcamentos if o[2]}))
         cliente_filtro = st.selectbox("Filtrar por cliente:", ["Todos"] + clientes, key="filtro_cliente")
 
@@ -710,10 +709,8 @@ if menu == "Histórico de Orçamentos":
         for o in orcamentos:
             orc_id, data_hora, cliente_nome, vendedor_nome = o
             data_obj = datetime.strptime(data_hora, "%d/%m/%Y %H:%M")
-
             cliente_ok = (cliente_filtro == "Todos" or cliente_nome == cliente_filtro)
             data_ok = (data_inicio <= data_obj.date() <= data_fim)
-
             if cliente_ok and data_ok:
                 orcamentos_filtrados.append(o)
 
@@ -723,61 +720,52 @@ if menu == "Histórico de Orçamentos":
             for o in orcamentos_filtrados:
                 orc_id, data_hora, cliente_nome, vendedor_nome = o
                 pdf_path = f"orcamento_{orc_id}.pdf"
+                orc, confecc, bob = carregar_orcamento_por_id(orc_id)
 
                 with st.expander(f"📝 ID {orc_id} - {cliente_nome} ({data_hora})"):
                     st.markdown(f"**👤 Cliente:** {cliente_nome}")
                     st.markdown(f"**🗣️ Vendedor:** {vendedor_nome}")
 
-                    orc, confecc, bob = carregar_orcamento_por_id(orc_id)
-
                     if confecc:
                         st.markdown("### ⬛ Itens Confeccionados")
                         for c in confecc:
-                            st.markdown(
-                                f"- **{c[0]}**: {c[3]}x {c[1]:.2f}m x {c[2]:.2f}m | Cor: {c[4]}"
-                            )
+                            st.markdown(f"- **{c[0]}**: {c[3]}x {c[1]:.2f}m x {c[2]:.2f}m | Cor: {c[4]}")
 
                     if bob:
                         st.markdown("### 🔘 Itens Bobinas")
                         for b in bob:
                             esp = f" | Esp: {b[5]:.2f}mm" if (b[5] is not None) else ""
-                            st.markdown(
-                                f"- **{b[0]}**: {b[3]}x {b[1]:.2f}m | Largura: {b[2]:.2f}m{esp} | Cor: {b[4]}"
-                            )
+                            st.markdown(f"- **{b[0]}**: {b[3]}x {b[1]:.2f}m | Largura: {b[2]:.2f}m{esp} | Cor: {b[4]}")
 
-                    col1, col2, col3 = st.columns([1,1,1])
+                    col1, col2 = st.columns([1,1])
                     with col1:
                         if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
                             if orc:
                                 # Atualiza session_state com dados do orçamento
-                                st.session_state["Cliente_nome"] = orc[2] or ""
-                                st.session_state["Cliente_CNPJ"] = orc[3] or ""
-                                st.session_state["tipo_cliente"] = orc[4] or " "
-                                st.session_state["estado"] = orc[5] or list(icms_por_estado.keys())[0]
-                                st.session_state["frete_sel"] = orc[6] or "CIF"
-                                st.session_state["tipo_pedido"] = orc[7] or "Direta"
-                                st.session_state["vend_nome"] = orc[8] or ""
-                                st.session_state["vend_tel"] = orc[9] or ""
-                                st.session_state["vend_email"] = orc[10] or ""
-                                st.session_state["obs"] = orc[11] or ""
-
-    # Itens
-    st.session_state["itens_confeccionados"] = [
-        {"produto": c[0], "comprimento": float(c[1]), "largura": float(c[2]), "quantidade": int(c[3]), "cor": c[4] or ""}
-        for c in confecc
-    ] if confecc else []
-
-    st.session_state["bobinas_adicionadas"] = [
-        {"produto": b[0], "comprimento": float(b[1]), "largura": float(b[2]), "quantidade": int(b[3]),
-         "cor": b[4] or "", "espessura": float(b[5]) if (b[5] is not None) else None,
-         "preco_unitario": float(b[6]) if (b[6] is not None) else None}
-        for b in bob
-    ] if bob else []
-
-    # Força o menu a abrir "Novo Orçamento"
-    st.session_state["menu_selected"] = "Novo Orçamento"
-    st.experimental_rerun()  # força atualização imediata da página
-
+                                st.session_state.update({
+                                    "Cliente_nome": orc[2] or "",
+                                    "Cliente_CNPJ": orc[3] or "",
+                                    "tipo_cliente": orc[4] or " ",
+                                    "estado": orc[5] or list(icms_por_estado.keys())[0],
+                                    "frete_sel": orc[6] or "CIF",
+                                    "tipo_pedido": orc[7] or "Direta",
+                                    "vend_nome": orc[8] or "",
+                                    "vend_tel": orc[9] or "",
+                                    "vend_email": orc[10] or "",
+                                    "obs": orc[11] or "",
+                                    "itens_confeccionados": [
+                                        {"produto": c[0], "comprimento": float(c[1]), "largura": float(c[2]),
+                                         "quantidade": int(c[3]), "cor": c[4] or ""} for c in confecc
+                                    ] if confecc else [],
+                                    "bobinas_adicionadas": [
+                                        {"produto": b[0], "comprimento": float(b[1]), "largura": float(b[2]),
+                                         "quantidade": int(b[3]), "cor": b[4] or "",
+                                         "espessura": float(b[5]) if b[5] is not None else None,
+                                         "preco_unitario": float(b[6]) if b[6] is not None else None} for b in bob
+                                    ] if bob else [],
+                                    "menu_selected": "Novo Orçamento"
+                                })
+                                st.experimental_rerun()
 
                     with col2:
                         if os.path.exists(pdf_path):
@@ -792,8 +780,7 @@ if menu == "Histórico de Orçamentos":
                         else:
                             st.warning("PDF ainda não gerado.")
 
-
-            # Novo botão: exportar relatório Excel
+            # Botão exportar Excel (fora do loop)
             excel_file = exportar_excel(orcamentos)
             st.download_button(
                 "📊 Exportar Relatório Excel",
