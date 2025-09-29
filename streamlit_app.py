@@ -184,7 +184,7 @@ def _format_brl(v):
 # ============================
 # Cálculos (pequenas proteções)
 # ============================
-st_por_estado = {}  # declarado cedo, depois definido mais abaixo
+st_por_estado = {}
 
 def calcular_valores_confeccionados(itens, preco_m2, tipo_cliente="", estado="", tipo_pedido="Direta"):
     if not itens:
@@ -212,16 +212,19 @@ def calcular_valores_confeccionados(itens, preco_m2, tipo_cliente="", estado="",
 def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
     if not itens:
         return 0.0, 0.0, 0.0, 0.0
-    # m_total: soma dos metros (comprimento * quantidade)
+
+    produtos_sem_ipi = ["Acrylic", "Agora", "Tela de Sombreamento", "Encerado"]
+
     m_total = sum(item['comprimento'] * item['quantidade'] for item in itens)
-    # valor bruto: usar preco_unitario se NÃO for None, senão usar preco_m2
+
     def preco_item_of(item):
-        pu = item.get('preco_unitario')  # pode ser None
+        pu = item.get('preco_unitario')
         return pu if (pu is not None) else preco_m2
 
     valor_bruto = sum((item['comprimento'] * item['quantidade']) * preco_item_of(item) for item in itens)
 
-    if tipo_pedido == "Industrialização":
+    # Verifica se algum item está isento de IPI
+    if tipo_pedido == "Industrialização" or all(item['produto'] in produtos_sem_ipi for item in itens):
         valor_ipi = 0
         valor_final = valor_bruto
     else:
@@ -231,172 +234,31 @@ def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
     return m_total, valor_bruto, valor_ipi, valor_final
 
 # ============================
-# Função para gerar PDF (retorna bytes)
+# Resto do código do Streamlit...
 # ============================
-def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_conf, resumo_bob, observacao, preco_m2, tipo_cliente="", estado=""):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.set_font("Arial", "B", 14)
 
-    # Cabeçalho
-    pdf.cell(0, 12, "Orçamento - Grupo Locomotiva", ln=True, align="C")
-    pdf.ln(10)
-    pdf.set_font("Arial", size=9)
-    pdf.cell(0, 10, f"Orçamento ID: {orcamento_id}", ln=True)
-    brasilia_tz = pytz.timezone("America/Sao_Paulo")
-    pdf.cell(0, 6, f"Data e Hora: {datetime.now(brasilia_tz).strftime('%d/%m/%Y %H:%M')}", ln=True)
-    pdf.cell(0, 6, "Validade da Cotação: 7 dias.", ln=True, align="L")
-    pdf.ln(4)
-
-    # Dados do Cliente
-    pdf.set_font("Arial", "B", 11)
-    pdf.cell(0, 6, "Cliente", ln=True)
-    pdf.set_font("Arial", size=10)
-    largura_util = pdf.w - 2*pdf.l_margin
-
-    for chave in ["nome", "cnpj", "tipo_cliente", "estado", "frete", "tipo_pedido"]:
-        valor = str(cliente.get(chave, "") or "")
-        if valor.strip():
-            pdf.cell(0, 6, f"{chave.replace('_',' ').title()}: {valor}", align="L")
-            pdf.ln(5)
-    pdf.ln(5)
-
-    # Itens Confeccionados
-    if itens_confeccionados:
-        pdf.set_font("Arial", "B", 11)
-        pdf.cell(0, 8, "Itens Confeccionados", ln=True)
-        pdf.set_font("Arial", size=8)
-        for item in itens_confeccionados:
-            area_item = item['comprimento'] * item['largura'] * item['quantidade']
-            valor_item = area_item * preco_m2
-            txt = (
-                f"{item['quantidade']}x {item['produto']} - {item['comprimento']}m x {item['largura']}m "
-                f"| Cor: {item.get('cor','')} | Valor Bruto: {_format_brl(valor_item)}"
-            )
-            pdf.multi_cell(largura_util, 6, txt)
-            pdf.ln(1)
-
-    # Resumo Confeccionados
-    if resumo_conf:
-        m2_total, valor_bruto, valor_ipi, valor_final, valor_st, aliquota_st = resumo_conf
-        pdf.ln(3)
-        pdf.set_font("Arial", "B", 11)
-        pdf.cell(0, 10, "Resumo - Confeccionados", ln=True)
-        pdf.set_font("Arial", "", 10)
-        pdf.cell(0, 8, f"Preço por m² utilizado: {_format_brl(preco_m2)}", ln=True)
-        pdf.cell(0, 8, f"Área Total: {str(f'{m2_total:.2f}'.replace('.', ','))} m²", ln=True)
-        pdf.cell(0, 8, f"Valor Bruto: {_format_brl(valor_bruto)}", ln=True)
-        if valor_ipi>0:
-            pdf.cell(0, 8, f"IPI: {_format_brl(valor_ipi)}", ln=True)
-        if valor_st>0:
-            pdf.cell(0, 8, f"ST ({aliquota_st}%): {_format_brl(valor_st)}", ln=True)
-        pdf.set_font("Arial", "B", 10)
-        pdf.cell(0, 8, f"Valor Total: {_format_brl(valor_final)}", ln=True)
-        pdf.set_font("Arial", "", 10)
-        pdf.ln(10)
-
-    # Itens Bobinas
-    if itens_bobinas:
-        pdf.set_font("Arial", "B", 11)
-        pdf.cell(0, 8, "Itens Bobina", ln=True)
-        pdf.set_font("Arial", size=8)
-        for item in itens_bobinas:
-            metros_item = item['comprimento'] * item['quantidade']
-            preco_item = item.get('preco_unitario') if item.get('preco_unitario') is not None else preco_m2
-            valor_item = metros_item * preco_item
-            txt = (
-                f"{item['quantidade']}x {item['produto']} - {item['comprimento']}m | Largura: {item['largura']}m "
-                f"| Cor: {item.get('cor','')} | Valor Bruto: {_format_brl(valor_item)}"
-            )
-            if "espessura" in item and item.get('espessura') is not None:
-                esp = f"{item['espessura']:.2f}".replace(".", ",")
-                txt += f" | Esp: {esp} mm"
-                txt += f" | Preço metro: {_format_brl(preco_item)}"
-            pdf.multi_cell(largura_util, 6, txt)
-            pdf.ln(1)
-
-        if resumo_bob:
-            m_total, valor_bruto, valor_ipi, valor_final = resumo_bob
-            pdf.ln(3)
-            pdf.set_font("Arial", "B", 11)
-            pdf.cell(0, 10, "Resumo - Bobinas", ln=True)
-            pdf.set_font("Arial", "", 10)
-            pdf.cell(0, 8, f"Total de Metros Lineares: {str(f'{m_total:.2f}'.replace('.', ','))} m", ln=True)
-            pdf.cell(0, 8, f"Valor Bruto: {_format_brl(valor_bruto)}", ln=True)
-            if valor_ipi>0:
-                pdf.cell(0, 8, f"IPI: {_format_brl(valor_ipi)}", ln=True)
-            pdf.set_font("Arial", "B", 10)
-            pdf.cell(0, 8, f"Valor Total: {_format_brl(valor_final)}", ln=True)
-        pdf.ln(10)
-
-    # Observações
-    if observacao:
-        pdf.set_font("Arial", "B", 11)
-        pdf.cell(0, 11, "Observações", ln=True)
-        pdf.set_font("Arial", size=10)
-        pdf.multi_cell(largura_util, 10, str(observacao))
-        pdf.ln(10)
-
-    # Vendedor
-    if vendedor:
-        pdf.set_font("Arial", "", 10)
-        vendedor_txt = (
-            f"Vendedor: {vendedor.get('nome','')}\n"
-            f"Telefone: {vendedor.get('tel','')}\n"
-            f"E-mail: {vendedor.get('email','')}"
-        )
-        pdf.multi_cell(largura_util, 8, vendedor_txt)
-        pdf.ln(5)
-
-    # Retorna bytes do PDF
-    pdf_bytes = pdf.output(dest='S').encode('latin1')
-    return pdf_bytes
-
-# ============================
-# Inicialização
-# ============================
+# Inicialização do DB
 init_db()
 
-# session state defaults for form fields (so reabrir can populate)
+# Configurações Streamlit
+st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", layout="centered")
+st.title("Orçamento - Grupo Locomotiva")
+
+# Session state defaults
 defaults = {
-    "Cliente_nome": "",
-    "Cliente_CNPJ": "",
-    "tipo_cliente": " ",
-    "estado": None,
-    "tipo_pedido": "Direta",
-    "preco_m2": 0.0,
-    "itens_confeccionados": [],
-    "bobinas_adicionadas": [],
-    "frete_sel": "CIF",
-    "obs": "",
-    "vend_nome": "",
-    "vend_tel": "",
-    "vend_email": ""
+    "Cliente_nome": "", "Cliente_CNPJ": "", "tipo_cliente": " ", "estado": None,
+    "tipo_pedido": "Direta", "preco_m2": 0.0, "itens_confeccionados": [], "bobinas_adicionadas": [],
+    "frete_sel": "CIF", "obs": "", "vend_nome": "", "vend_tel": "", "vend_email": ""
 }
 for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
-# ============================
-# Configuração Streamlit
-# ============================
-st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", layout="centered")
-st.title("Orçamento - Grupo Locomotiva")
-
-# --- Menu ---
-menu = st.sidebar.selectbox("Menu", ["Novo Orçamento","Histórico de Orçamentos"], index=0)
-
-# ============================
-# Tabelas de ICMS e ST
-# ============================
+# ICMS e ST
 icms_por_estado = {
     "SP": 18, "MG": 12, "PR": 12, "RJ": 12, "RS": 12, "SC": 12
 }
-todos_estados = [
-    "AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MT","MS",
-    "PA","PB","PE","PI","RN","RO","RR","SE","TO"
-]
+todos_estados = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MT","MS","PA","PB","PE","PI","RN","RO","RR","SE","TO"]
 for uf in todos_estados:
     if uf not in icms_por_estado:
         icms_por_estado[uf] = 7
@@ -749,7 +611,7 @@ if menu == "Histórico de Orçamentos":
                             )
                             
                 col1, col2 = st.columns([1,1])
-                    with col1:
+                with col1:
                         if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
                             if orc:
                                 # Preencher dados do cliente e vendedor
