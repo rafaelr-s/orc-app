@@ -356,63 +356,97 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
     pdf_bytes = pdf.output(dest='S').encode('latin1')
     return pdf_bytes
 
-# Inicialização do DB
-init_db()
-
 # Configurações Streamlit
 st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", layout="centered")
 st.title("Orçamento - Grupo Locomotiva")
 
 # ============================
-# Controle de Menu
+# Inicialização
 # ============================
+init_db()
+
 if "menu_selected" not in st.session_state:
     st.session_state["menu_selected"] = "Novo Orçamento"
 
 menu = st.sidebar.radio(
     "Menu",
-    ["Novo Orçamento", "Histórico de Orçamentos"],
-    index=0 if st.session_state["menu_selected"] == "Novo Orçamento" else 1
+    ["Novo Orçamento", "Histórico de Orçamentos", "Editar Orçamento"],
+    index=0 if st.session_state["menu_selected"] == "Novo Orçamento" else 
+          1 if st.session_state["menu_selected"] == "Histórico de Orçamentos" else 2
 )
-
 st.session_state["menu_selected"] = menu
 
 # ============================
-# Lógica de Navegação
+# Novo Orçamento
 # ============================
 if st.session_state["menu_selected"] == "Novo Orçamento":
     st.title("Novo Orçamento")
-    # Aqui entra sua lógica de criação de orçamento
-    # (formulário, salvar no banco, gerar PDF, etc.)
 
+    cliente = st.text_input("Nome do Cliente")
+    valor_total = st.number_input("Valor Total", min_value=0.0, step=0.01)
+    itens = st.text_area("Itens do Orçamento (descrição livre)")
+
+    if st.button("Salvar Orçamento"):
+        data_atual = datetime.now(pytz.timezone("America/Sao_Paulo")).strftime("%d/%m/%Y %H:%M")
+        salvar_orcamento(cliente, data_atual, valor_total, itens)
+        st.success("Orçamento salvo com sucesso!")
+
+# ============================
+# Histórico de Orçamentos
+# ============================
 elif st.session_state["menu_selected"] == "Histórico de Orçamentos":
     st.title("Histórico de Orçamentos")
 
-    conn = sqlite3.connect("orcamentos.db")
-    cur = conn.cursor()
-    cur.execute("SELECT id, cliente, data, valor_total FROM orcamentos ORDER BY id DESC")
-    rows = cur.fetchall()
-    conn.close()
-
+    rows = carregar_orcamentos()
     if rows:
         df = pd.DataFrame(rows, columns=["ID", "Cliente", "Data", "Valor Total"])
         st.dataframe(df, use_container_width=True)
 
         selected_id = st.selectbox("Selecione um orçamento para visualizar", df["ID"])
         if st.button("Carregar Orçamento"):
-            # Carrega os detalhes do orçamento selecionado
-            conn = sqlite3.connect("orcamentos.db")
-            cur = conn.cursor()
-            cur.execute("SELECT * FROM orcamentos WHERE id = ?", (selected_id,))
-            orcamento = cur.fetchone()
-            conn.close()
-
+            orcamento = carregar_orcamento_por_id(selected_id)
             if orcamento:
                 st.write(f"### Orçamento #{orcamento[0]}")
-                st.json(orcamento)
+                st.write(f"**Cliente:** {orcamento[1]}")
+                st.write(f"**Data:** {orcamento[2]}")
+                st.write(f"**Valor Total:** R$ {orcamento[3]:,.2f}")
+                st.write(f"**Itens:** {orcamento[4]}")
+
+                pdf_buffer = gerar_pdf(orcamento)
+                st.download_button(
+                    "Baixar PDF",
+                    data=pdf_buffer,
+                    file_name=f"orcamento_{orcamento[0]}.pdf",
+                    mime="application/pdf"
+                )
     else:
         st.info("Nenhum orçamento encontrado.")
 
+# ============================
+# Editar Orçamento (salvar como novo)
+# ============================
+elif st.session_state["menu_selected"] == "Editar Orçamento":
+    st.title("Editar Orçamento Existente")
+
+    rows = carregar_orcamentos()
+    if rows:
+        df = pd.DataFrame(rows, columns=["ID", "Cliente", "Data", "Valor Total"])
+        selected_id = st.selectbox("Selecione um orçamento para editar", df["ID"])
+        orcamento = carregar_orcamento_por_id(selected_id)
+
+        if orcamento:
+            cliente_edit = st.text_input("Nome do Cliente", value=orcamento[1])
+            valor_total_edit = st.number_input("Valor Total", min_value=0.0, step=0.01, value=orcamento[3])
+            itens_edit = st.text_area("Itens do Orçamento", value=orcamento[4])
+
+            if st.button("Salvar como Novo Orçamento"):
+                data_atual = datetime.now(pytz.timezone("America/Sao_Paulo")).strftime("%d/%m/%Y %H:%M")
+                salvar_orcamento(cliente_edit, data_atual, valor_total_edit, itens_edit)
+                st.success("Orçamento editado e salvo como novo com sucesso!")
+
+    else:
+        st.info("Nenhum orçamento encontrado para edição.")
+        
 # Session state defaults
 defaults = {
     "Cliente_nome": "", "Cliente_CNPJ": "", "tipo_cliente": " ", "estado": None,
