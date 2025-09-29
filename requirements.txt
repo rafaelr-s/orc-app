@@ -2,3 +2,4 @@ streamlit
 datetime
 pytz
 fpdf
+openpyxl
