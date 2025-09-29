@@ -685,7 +685,7 @@ st.markdown("🔒 Os dados acima são apenas para inclusão no orçamento (PDF o
 
 
 # ============================
-# Página Histórico - Corrigido Reabrir
+# Página Histórico
 # ============================
 if menu == "Histórico de Orçamentos":
     st.subheader("📋 Histórico de Orçamentos")
@@ -708,20 +708,46 @@ if menu == "Histórico de Orçamentos":
             key="filtro_datas"
         )
 
-        orcamentos_filtrados = [
-            o for o in orcamentos
-            if (cliente_filtro == "Todos" or o[2] == cliente_filtro) and
-               (data_inicio <= datetime.strptime(o[1], "%d/%m/%Y %H:%M").date() <= data_fim)
-        ]
+        orcamentos_filtrados = []
+        for o in orcamentos:
+            orc_id, data_hora, cliente_nome, vendedor_nome = o
+            data_obj = datetime.strptime(data_hora, "%d/%m/%Y %H:%M")
+
+            cliente_ok = (cliente_filtro == "Todos" or cliente_nome == cliente_filtro)
+            data_ok = (data_inicio <= data_obj.date() <= data_fim)
+
+            if cliente_ok and data_ok:
+                orcamentos_filtrados.append(o)
 
         if not orcamentos_filtrados:
             st.warning("Nenhum orçamento encontrado com os filtros selecionados.")
         else:
-            # ======== REABRIR - FLAG ANTES DE QUALQUER WIDGET =========
             for o in orcamentos_filtrados:
                 orc_id, data_hora, cliente_nome, vendedor_nome = o
                 pdf_path = f"orcamento_{orc_id}.pdf"
 
+                with st.expander(f"📝 ID {orc_id} - {cliente_nome} ({data_hora})"):
+                    st.markdown(f"**👤 Cliente:** {cliente_nome}")
+                    st.markdown(f"**🗣️ Vendedor:** {vendedor_nome}")
+
+                    orc, confecc, bob = carregar_orcamento_por_id(orc_id)
+
+                    # Mostrar itens no histórico
+                    if confecc:
+                        st.markdown("### ⬛ Itens Confeccionados")
+                        for c in confecc:
+                            st.markdown(
+                                f"- **{c[0]}**: {c[3]}x {c[1]:.2f}m x {c[2]:.2f}m | Cor: {c[4]}"
+                            )
+
+                    if bob:
+                        st.markdown("### 🔘 Itens Bobinas")
+                        for b in bob:
+                            esp = f" | Esp: {b[5]:.2f}mm" if (b[5] is not None) else ""
+                            st.markdown(
+                                f"- **{b[0]}**: {b[3]}x {b[1]:.2f}m | Largura: {b[2]:.2f}m{esp} | Cor: {b[4]}"
+                            )
+                            
                 # Botão Reabrir
                 reabrir_key = f"reabrir_{orc_id}"
                 if st.button("🔄 Reabrir", key=reabrir_key):
