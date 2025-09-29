@@ -364,21 +364,54 @@ st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", 
 st.title("Orçamento - Grupo Locomotiva")
 
 # ============================
-# Controle do Menu
+# Controle de Menu
 # ============================
 if "menu_selected" not in st.session_state:
     st.session_state["menu_selected"] = "Novo Orçamento"
 
-# selectbox usa uma variável auxiliar para evitar conflito direto com session_state
-menu_choice = st.sidebar.selectbox(
+menu = st.sidebar.radio(
     "Menu",
     ["Novo Orçamento", "Histórico de Orçamentos"],
     index=0 if st.session_state["menu_selected"] == "Novo Orçamento" else 1
 )
 
-# sincroniza e garante que 'menu' existe para os ifs seguintes
-st.session_state["menu_selected"] = menu_choice
-menu = st.session_state["menu_selected"]
+st.session_state["menu_selected"] = menu
+
+# ============================
+# Lógica de Navegação
+# ============================
+if st.session_state["menu_selected"] == "Novo Orçamento":
+    st.title("Novo Orçamento")
+    # Aqui entra sua lógica de criação de orçamento
+    # (formulário, salvar no banco, gerar PDF, etc.)
+
+elif st.session_state["menu_selected"] == "Histórico de Orçamentos":
+    st.title("Histórico de Orçamentos")
+
+    conn = sqlite3.connect("orcamentos.db")
+    cur = conn.cursor()
+    cur.execute("SELECT id, cliente, data, valor_total FROM orcamentos ORDER BY id DESC")
+    rows = cur.fetchall()
+    conn.close()
+
+    if rows:
+        df = pd.DataFrame(rows, columns=["ID", "Cliente", "Data", "Valor Total"])
+        st.dataframe(df, use_container_width=True)
+
+        selected_id = st.selectbox("Selecione um orçamento para visualizar", df["ID"])
+        if st.button("Carregar Orçamento"):
+            # Carrega os detalhes do orçamento selecionado
+            conn = sqlite3.connect("orcamentos.db")
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM orcamentos WHERE id = ?", (selected_id,))
+            orcamento = cur.fetchone()
+            conn.close()
+
+            if orcamento:
+                st.write(f"### Orçamento #{orcamento[0]}")
+                st.json(orcamento)
+    else:
+        st.info("Nenhum orçamento encontrado.")
 
 # Session state defaults
 defaults = {
