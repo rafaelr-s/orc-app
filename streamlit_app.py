@@ -10,13 +10,43 @@ from io import BytesIO
 def exportar_excel(orcamentos):
     dados_export = []
     for o in orcamentos:
-        id_orc, data_hora, cliente_nome, vendedor_nome = o
+        orc_id, data_hora, cliente_nome, vendedor_nome = o
+        orc, confecc, bob = carregar_orcamento_por_id(orc_id)
+
+        # Confeccionados detalhados
+        itens_conf_txt = []
+        if confecc:
+            for c in confecc:
+                valor_item = (c[1] * c[2] * c[3])  # área total (m²)
+                itens_conf_txt.append(
+                    f"{c[3]}x {c[0]} {c[1]:.2f}m x {c[2]:.2f}m | Cor: {c[4]}"
+                )
+        
+        # Bobinas detalhadas
+        itens_bob_txt = []
+        if bob:
+            for b in bob:
+                esp = f" | Esp: {b[5]:.2f}mm" if b[5] is not None else ""
+                preco = f" | Preço unit.: {b[6]:.2f} R$" if b[6] is not None else ""
+                itens_bob_txt.append(
+                    f"{b[3]}x {b[0]} {b[1]:.2f}m | Largura: {b[2]:.2f}m{esp} | Cor: {b[4]}{preco}"
+                )
+
+        # Exporta uma linha por orçamento
         dados_export.append({
-            "ID Orçamento": id_orc,
+            "ID Orçamento": orc_id,
             "Data/Hora": data_hora,
             "Cliente": cliente_nome,
-            "Vendedor": vendedor_nome
+            "Vendedor": vendedor_nome,
+            "Tipo Cliente": orc[4] if orc else "",
+            "Estado": orc[5] if orc else "",
+            "Tipo Pedido": orc[7] if orc else "",
+            "Frete": orc[6] if orc else "",
+            "Observação": orc[11] if orc else "",
+            "Itens Confeccionados": "\n".join(itens_conf_txt),
+            "Itens Bobinas": "\n".join(itens_bob_txt)
         })
+
     df = pd.DataFrame(dados_export)
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
@@ -640,8 +670,8 @@ if menu == "Novo Orçamento":
             mime="application/pdf",
             key=f"download_generated_{orcamento_id}"
         )
-
 st.markdown("🔒 Os dados acima são apenas para inclusão no orçamento (PDF ou impressão futura).")
+
 
 # ============================
 # Página Histórico
@@ -709,42 +739,49 @@ if menu == "Histórico de Orçamentos":
                     col1, col2, col3 = st.columns([1,1,1])
                     with col1:
                         if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
-                            # Carregar dados do orçamento e preencher session_state
-                            if orc:
-                                st.session_state["Cliente_nome"] = orc[2] or ""
-                                st.session_state["Cliente_CNPJ"] = orc[3] or ""
-                                st.session_state["tipo_cliente"] = orc[4] or " "
-                                st.session_state["estado"] = orc[5] or list(icms_por_estado.keys())[0]
-                                st.session_state["frete_sel"] = orc[6] or "CIF"
-                                st.session_state["tipo_pedido"] = orc[7] or "Direta"
-                                st.session_state["vend_nome"] = orc[8] or ""
-                                st.session_state["vend_tel"] = orc[9] or ""
-                                st.session_state["vend_email"] = orc[10] or ""
-                                st.session_state["obs"] = orc[11] or ""
+        # Carregar dados do orçamento e preencher session_state
+                    if orc:
+            st.session_state["Cliente_nome"] = orc[2] or ""
+            st.session_state["Cliente_CNPJ"] = orc[3] or ""
+            st.session_state["tipo_cliente"] = orc[4] or " "
+            st.session_state["estado"] = orc[5] or list(icms_por_estado.keys())[0]
+            st.session_state["frete_sel"] = orc[6] or "CIF"
+            st.session_state["tipo_pedido"] = orc[7] or "Direta"
+            st.session_state["vend_nome"] = orc[8] or ""
+            st.session_state["vend_tel"] = orc[9] or ""
+            st.session_state["vend_email"] = orc[10] or ""
+            st.session_state["obs"] = orc[11] or ""
 
-                            # colocar itens em session_state (confeccionados e bobinas)
-                            st.session_state["itens_confeccionados"] = [
-                                {"produto": c[0], "comprimento": float(c[1]), "largura": float(c[2]), "quantidade": int(c[3]), "cor": c[4] or ""}
-                                for c in confecc
-                            ] if confecc else []
+        # colocar itens em session_state (confeccionados e bobinas)
+        st.session_state["itens_confeccionados"] = [
+            {"produto": c[0], "comprimento": float(c[1]), "largura": float(c[2]), "quantidade": int(c[3]), "cor": c[4] or "", "preco_unitario": None}
+            for c in confecc
+        ] if confecc else []
 
-                            st.session_state["bobinas_adicionadas"] = [
-                                {
-                                    "produto": b[0],
-                                    "comprimento": float(b[1]),
-                                    "largura": float(b[2]),
-                                    "quantidade": int(b[3]),
-                                    "cor": b[4] or "",
-                                    "espessura": float(b[5]) if (b[5] is not None) else None,
-                                    "preco_unitario": float(b[6]) if (b[6] is not None) else None
-                                }
-                                for b in bob
-                            ] if bob else []
+        st.session_state["bobinas_adicionadas"] = [
+            {
+                "produto": b[0],
+                "comprimento": float(b[1]),
+                "largura": float(b[2]),
+                "quantidade": int(b[3]),
+                "cor": b[4] or "",
+                "espessura": float(b[5]) if (b[5] is not None) else None,
+                "preco_unitario": float(b[6]) if (b[6] is not None) else 0.0
+            }
+            for b in bob
+        ] if bob else []
 
-                            # Alterar menu para "Novo Orçamento" e recarregar
-                            st.session_state["menu_selected"] = "Novo Orçamento"
-                            st.rerun()
+        # Preencher preco_m2 com o último valor do orçamento
+        if st.session_state["itens_confeccionados"]:
+            st.session_state["preco_m2"] = st.session_state["itens_confeccionados"][0].get("preco_unitario", st.session_state.get("preco_m2", 0.0))
+        elif st.session_state["bobinas_adicionadas"]:
+            st.session_state["preco_m2"] = st.session_state["bobinas_adicionadas"][0].get("preco_unitario", st.session_state.get("preco_m2", 0.0))
+        else:
+            st.session_state["preco_m2"] = st.session_state.get("preco_m2", 0.0)
 
+        # Alterar menu para "Novo Orçamento" e recarregar
+        st.session_state["menu_selected"] = "Novo Orçamento"
+        st.rerun()
                     with col2:
                         if os.path.exists(pdf_path):
                             with open(pdf_path, "rb") as f:
