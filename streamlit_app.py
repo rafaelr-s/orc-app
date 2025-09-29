@@ -777,10 +777,6 @@ if menu == "Histórico de Orçamentos":
             st.session_state["preco_m2"] = st.session_state["bobinas_adicionadas"][0].get("preco_unitario", st.session_state.get("preco_m2", 0.0))
         else:
             st.session_state["preco_m2"] = st.session_state.get("preco_m2", 0.0)
-
-        # Alterar menu para "Novo Orçamento" e recarregar
-        st.session_state["menu_selected"] = "Novo Orçamento"
-        st.rerun()
         
         with col2:
             if os.path.exists(pdf_path):
@@ -803,5 +799,3 @@ if menu == "Histórico de Orçamentos":
         file_name="relatorio_orcamentos.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-else:
-    st.info("Nenhum orçamento encontrado nos últimos 12 meses.")
