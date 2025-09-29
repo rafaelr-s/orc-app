@@ -7,17 +7,27 @@ import sqlite3
 import pandas as pd
 from io import BytesIO
 
+# ============================
+# Função para exportar Excel
+# ============================
 def exportar_excel(orcamentos):
     dados_export = []
     for o in orcamentos:
         orc_id, data_hora, cliente_nome, vendedor_nome = o
         orc, confecc, bob = carregar_orcamento_por_id(orc_id)
 
+        # Lista de produtos
+        produtos_lista = []
+        if confecc:
+            produtos_lista.extend([c[0] for c in confecc])
+        if bob:
+            produtos_lista.extend([b[0] for b in bob])
+
         # Confeccionados detalhados
         itens_conf_txt = []
         if confecc:
             for c in confecc:
-                valor_item = (c[1] * c[2] * c[3])  # área total (m²)
+                valor_item = c[1] * c[2] * c[3]  # área total (m²)
                 itens_conf_txt.append(
                     f"{c[3]}x {c[0]} {c[1]:.2f}m x {c[2]:.2f}m | Cor: {c[4]}"
                 )
@@ -37,7 +47,7 @@ def exportar_excel(orcamentos):
             "ID Orçamento": orc_id,
             "Data/Hora": data_hora,
             "Cliente": cliente_nome,
-            "Produto": produtos_lista,
+            "Produto": ", ".join(produtos_lista),
             "Tipo Cliente": orc[4] if orc else "",
             "Estado": orc[5] if orc else "",
             "Tipo Pedido": orc[7] if orc else "",
@@ -741,7 +751,7 @@ if menu == "Histórico de Orçamentos":
                     with col1:
                         if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
                             if orc:
-                                # Preencher session_state
+                                # Preencher dados do cliente e vendedor
                                 st.session_state["Cliente_nome"] = orc[2] or ""
                                 st.session_state["Cliente_CNPJ"] = orc[3] or ""
                                 st.session_state["tipo_cliente"] = orc[4] or " "
@@ -753,40 +763,43 @@ if menu == "Histórico de Orçamentos":
                                 st.session_state["vend_email"] = orc[10] or ""
                                 st.session_state["obs"] = orc[11] or ""
 
-                                # Itens confeccionados
-                                st.session_state["itens_confeccionados"] = [
-                                    {
-                                        "produto": c[0],
-                                        "comprimento": float(c[1]),
-                                        "largura": float(c[2]),
-                                        "quantidade": int(c[3]),
-                                        "cor": c[4] or "",
-                                        "preco_unitario": st.session_state.get("preco_m2",0.0)
-                                    } for c in confecc
-                                ] if confecc else []
+            # Itens Confeccionados
+            st.session_state["itens_confeccionados"] = [
+                {
+                    "produto": c[0],
+                    "comprimento": float(c[1]),
+                    "largura": float(c[2]),
+                    "quantidade": int(c[3]),
+                    "cor": c[4] or "",
+                    "preco_unitario": c[5] if len(c) > 5 and c[5] is not None else st.session_state.get("preco_m2",0.0)
+                }
+                for c in confecc
+            ] if confecc else []
 
-                                # Itens bobinas
-                                st.session_state["bobinas_adicionadas"] = [
-                                    {
-                                        "produto": b[0],
-                                        "comprimento": float(b[1]),
-                                        "largura": float(b[2]),
-                                        "quantidade": int(b[3]),
-                                        "cor": b[4] or "",
-                                        "espessura": float(b[5]) if (b[5] is not None) else None,
-                                        "preco_unitario": float(b[6]) if (b[6] is not None) else st.session_state.get("preco_m2",0.0)
-                                    } for b in bob
-                                ] if bob else []
+            # Itens Bobinas
+            st.session_state["bobinas_adicionadas"] = [
+                {
+                    "produto": b[0],
+                    "comprimento": float(b[1]),
+                    "largura": float(b[2]),
+                    "quantidade": int(b[3]),
+                    "cor": b[4] or "",
+                    "espessura": float(b[5]) if (b[5] is not None) else None,
+                    "preco_unitario": float(b[6]) if (b[6] is not None) else st.session_state.get("preco_m2",0.0)
+                }
+                for b in bob
+            ] if bob else []
 
-                                # Atualizar preço padrão
-                                if st.session_state["itens_confeccionados"]:
-                                    st.session_state["preco_m2"] = st.session_state["itens_confeccionados"][0].get("preco_unitario",0.0)
-                                elif st.session_state["bobinas_adicionadas"]:
-                                    st.session_state["preco_m2"] = st.session_state["bobinas_adicionadas"][0].get("preco_unitario",0.0)
+            # Preencher preço do orçamento (priorizando confeccionados, depois bobinas)
+            if st.session_state["itens_confeccionados"]:
+                st.session_state["preco_m2"] = st.session_state["itens_confeccionados"][0].get("preco_unitario",0.0)
+            elif st.session_state["bobinas_adicionadas"]:
+                st.session_state["preco_m2"] = st.session_state["bobinas_adicionadas"][0].get("preco_unitario",0.0)
+            else:
+                st.session_state["preco_m2"] = 0.0
 
-                                # Forçar mudar para menu "Novo Orçamento" e rerun
-                                st.session_state["menu"] = "Novo Orçamento"
-                                st.rerun()
+            # Forçar a tela "Novo Orçamento"
+            st.experimental_rerun()
 
                     with col2:
                         if os.path.exists(pdf_path):
