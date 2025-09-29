@@ -65,7 +65,7 @@ def exportar_excel(orcamentos):
     return output
 
 # ============================
-# Banco SQLite
+# Funções de Banco de Dados
 # ============================
 def init_db():
     conn = sqlite3.connect("orcamentos.db")
@@ -118,7 +118,6 @@ def init_db():
 def salvar_orcamento(cliente, vendedor, itens_confeccionados, itens_bobinas, observacao):
     conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
-
     cur.execute("""
         INSERT INTO orcamentos (data_hora, cliente_nome, cliente_cnpj, tipo_cliente, estado, frete, tipo_pedido, vendedor_nome, vendedor_tel, vendedor_email, observacao)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -174,7 +173,7 @@ def carregar_orcamento_por_id(orcamento_id):
     return orc, confecc, bob
 
 # ============================
-# Formatação R$
+# Função de formatação R$
 # ============================
 def _format_brl(v):
     try:
@@ -185,7 +184,7 @@ def _format_brl(v):
 # ============================
 # Cálculos (pequenas proteções)
 # ============================
-st_por_estado = {}  # declarado cedo, depois definido mais abaixo
+st_por_estado = {}
 
 def calcular_valores_confeccionados(itens, preco_m2, tipo_cliente="", estado="", tipo_pedido="Direta"):
     if not itens:
@@ -213,16 +212,19 @@ def calcular_valores_confeccionados(itens, preco_m2, tipo_cliente="", estado="",
 def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
     if not itens:
         return 0.0, 0.0, 0.0, 0.0
-    # m_total: soma dos metros (comprimento * quantidade)
+
+    produtos_sem_ipi = ["Acrylic", "Agora", "Tela de Sombreamento", "Encerado"]
+
     m_total = sum(item['comprimento'] * item['quantidade'] for item in itens)
-    # valor bruto: usar preco_unitario se NÃO for None, senão usar preco_m2
+
     def preco_item_of(item):
-        pu = item.get('preco_unitario')  # pode ser None
+        pu = item.get('preco_unitario')
         return pu if (pu is not None) else preco_m2
 
     valor_bruto = sum((item['comprimento'] * item['quantidade']) * preco_item_of(item) for item in itens)
 
-    if tipo_pedido == "Industrialização":
+    # Verifica se algum item está isento de IPI
+    if tipo_pedido == "Industrialização" or all(item['produto'] in produtos_sem_ipi for item in itens):
         valor_ipi = 0
         valor_final = valor_bruto
     else:
