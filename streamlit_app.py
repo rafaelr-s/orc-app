@@ -425,9 +425,11 @@ if menu == "Novo Orçamento":
                 'quantidade': int(quantidade),
                 'cor': ""
             })
+            st.rerun()
 
         if st.session_state['itens_confeccionados']:
             st.subheader("📋 Itens Adicionados")
+            to_remove_conf = None  # marcar item a remover
             for idx, item in enumerate(st.session_state['itens_confeccionados'][:] ):
                 col1, col2, col3, col4 = st.columns([3,2,2,1])
                 with col1:
@@ -442,10 +444,14 @@ if menu == "Novo Orçamento":
                     cor = st.text_input("Cor:", value=item['cor'], key=f"cor_conf_{idx}")
                     st.session_state['itens_confeccionados'][idx]['cor'] = cor
                 with col4:
-                    remover = st.button("❌", key=f"remover_conf_{idx}")
-                    if remover:
-                        st.session_state['itens_confeccionados'].pop(idx)
-                        st.rerun()
+                    if st.button("❌", key=f"remover_conf_{idx}"):
+                        to_remove_conf = idx
+
+            # só remover e rerun depois do loop
+            if to_remove_conf is not None:
+                st.session_state['itens_confeccionados'].pop(to_remove_conf)
+                st.rerun()
+
         if st.button("🧹 Limpar Itens", key="limpar_conf"):
             st.session_state['itens_confeccionados'] = []
             st.rerun()
@@ -482,7 +488,7 @@ if menu == "Novo Orçamento":
             espessura_bobina = st.number_input("Espessura da Bobina (mm):", min_value=0.010, value=0.10, step=0.010, key="esp_bob")
 
         if st.button("➕ Adicionar Bobina", key="add_bob"):
-                item_bobina = {
+            item_bobina = {
                 'produto': produto,
                 'comprimento': float(comprimento),
                 'largura': float(largura_bobina),
@@ -491,13 +497,13 @@ if menu == "Novo Orçamento":
                 'espessura': float(espessura_bobina) if espessura_bobina is not None else None,
                 'preco_unitario': preco_m2
             }
-                
-                st.session_state['bobinas_adicionadas'].append(item_bobina)
-        st.rerun()
+            st.session_state['bobinas_adicionadas'].append(item_bobina)
+            st.rerun()
 
         if st.session_state['bobinas_adicionadas']:
-           st.subheader("📋 Bobinas Adicionadas")
-           for idx, item in enumerate(st.session_state['bobinas_adicionadas'][:]):
+            st.subheader("📋 Bobinas Adicionadas")
+            to_remove_bob = None
+            for idx, item in enumerate(st.session_state['bobinas_adicionadas'][:] ):
                 metros_item = item['comprimento'] * item['quantidade']
                 preco_item = item.get('preco_unitario') if item.get('preco_unitario') is not None else preco_m2
                 valor_item = metros_item * preco_item
@@ -513,14 +519,18 @@ if menu == "Novo Orçamento":
                     cor = st.text_input("Cor:", value=item['cor'], key=f"cor_bob_{idx}")
                     st.session_state['bobinas_adicionadas'][idx]['cor'] = cor
                 with col3:
-                    remover = st.button("❌", key=f"remover_bob_{idx}")
-                    if remover:
-                        st.session_state['bobinas_adicionadas'].pop(idx)
-                        st.rerun()
-                        
-                    if st.button("🧹 Limpar Bobinas", key="limpar_bob"):
-                        st.session_state['bobinas_adicionadas'] = []
-                        st.rerun()
+                    if st.button("❌", key=f"remover_bob_{idx}"):
+                        to_remove_bob = idx
+
+            # remover apenas após o loop
+            if to_remove_bob is not None:
+                st.session_state['bobinas_adicionadas'].pop(to_remove_bob)
+                st.rerun()
+
+            # botão de limpar deve ficar fora do loop (único widget com a key "limpar_bob")
+            if st.button("🧹 Limpar Bobinas", key="limpar_bob"):
+                st.session_state['bobinas_adicionadas'] = []
+                st.rerun()
 
         if st.session_state['bobinas_adicionadas']:
             m_total, valor_bruto, valor_ipi, valor_final = calcular_valores_bobinas(
@@ -536,7 +546,6 @@ if menu == "Novo Orçamento":
             else:
                 st.write(f"💰 Valor Final: **{_format_brl(valor_final)}**")
                 
-            
 
     # Tipo de frete / observações / vendedor (com chaves para session_state)
     st.markdown("---")
