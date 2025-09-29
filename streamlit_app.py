@@ -234,8 +234,127 @@ def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
     return m_total, valor_bruto, valor_ipi, valor_final
 
 # ============================
-# Resto do código do Streamlit...
+# Função para gerar PDF (retorna bytes)
 # ============================
+def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_conf, resumo_bob, observacao, preco_m2, tipo_cliente="", estado=""):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_font("Arial", "B", 14)
+
+    # Cabeçalho
+    pdf.cell(0, 12, "Orçamento - Grupo Locomotiva", ln=True, align="C")
+    pdf.ln(10)
+    pdf.set_font("Arial", size=9)
+    pdf.cell(0, 10, f"Orçamento ID: {orcamento_id}", ln=True)
+    brasilia_tz = pytz.timezone("America/Sao_Paulo")
+    pdf.cell(0, 6, f"Data e Hora: {datetime.now(brasilia_tz).strftime('%d/%m/%Y %H:%M')}", ln=True)
+    pdf.cell(0, 6, "Validade da Cotação: 7 dias corridos.", ln=True, align="L")
+    pdf.ln(4)
+
+    # Dados do Cliente
+    pdf.set_font("Arial", "B", 11)
+    pdf.cell(0, 6, "Cliente", ln=True)
+    pdf.set_font("Arial", size=10)
+    largura_util = pdf.w - 2*pdf.l_margin
+
+    for chave in ["nome", "cnpj", "tipo_cliente", "estado", "frete", "tipo_pedido"]:
+        valor = str(cliente.get(chave, "") or "")
+        if valor.strip():
+            pdf.cell(0, 6, f"{chave.replace('_',' ').title()}: {valor}", align="L")
+            pdf.ln(5)
+    pdf.ln(5)
+
+    # Itens Confeccionados
+    if itens_confeccionados:
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(0, 8, "Itens Confeccionados", ln=True)
+        pdf.set_font("Arial", size=8)
+        for item in itens_confeccionados:
+            area_item = item['comprimento'] * item['largura'] * item['quantidade']
+            valor_item = area_item * preco_m2
+            txt = (
+                f"{item['quantidade']}x {item['produto']} - {item['comprimento']}m x {item['largura']}m "
+                f"| Cor: {item.get('cor','')} | Valor Bruto: {_format_brl(valor_item)}"
+            )
+            pdf.multi_cell(largura_util, 6, txt)
+            pdf.ln(1)
+
+    # Resumo Confeccionados
+    if resumo_conf:
+        m2_total, valor_bruto, valor_ipi, valor_final, valor_st, aliquota_st = resumo_conf
+        pdf.ln(3)
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(0, 10, "Resumo - Confeccionados", ln=True)
+        pdf.set_font("Arial", "", 10)
+        pdf.cell(0, 8, f"Preço por m² utilizado: {_format_brl(preco_m2)}", ln=True)
+        pdf.cell(0, 8, f"Área Total: {str(f'{m2_total:.2f}'.replace('.', ','))} m²", ln=True)
+        pdf.cell(0, 8, f"Valor Bruto: {_format_brl(valor_bruto)}", ln=True)
+        if valor_ipi>0:
+            pdf.cell(0, 8, f"IPI: {_format_brl(valor_ipi)}", ln=True)
+        if valor_st>0:
+            pdf.cell(0, 8, f"ST ({aliquota_st}%): {_format_brl(valor_st)}", ln=True)
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(0, 8, f"Valor Total: {_format_brl(valor_final)}", ln=True)
+        pdf.set_font("Arial", "", 10)
+        pdf.ln(10)
+
+    # Itens Bobinas
+    if itens_bobinas:
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(0, 8, "Itens Bobina", ln=True)
+        pdf.set_font("Arial", size=8)
+        for item in itens_bobinas:
+            metros_item = item['comprimento'] * item['quantidade']
+            preco_item = item.get('preco_unitario') if item.get('preco_unitario') is not None else preco_m2
+            valor_item = metros_item * preco_item
+            txt = (
+                f"{item['quantidade']}x {item['produto']} - {item['comprimento']}m | Largura: {item['largura']}m "
+                f"| Cor: {item.get('cor','')} | Valor Bruto: {_format_brl(valor_item)}"
+            )
+            if "espessura" in item and item.get('espessura') is not None:
+                esp = f"{item['espessura']:.2f}".replace(".", ",")
+                txt += f" | Esp: {esp} mm"
+                txt += f" | Preço metro: {_format_brl(preco_item)}"
+            pdf.multi_cell(largura_util, 6, txt)
+            pdf.ln(1)
+
+        if resumo_bob:
+            m_total, valor_bruto, valor_ipi, valor_final = resumo_bob
+            pdf.ln(3)
+            pdf.set_font("Arial", "B", 11)
+            pdf.cell(0, 10, "Resumo - Bobinas", ln=True)
+            pdf.set_font("Arial", "", 10)
+            pdf.cell(0, 8, f"Total de Metros Lineares: {str(f'{m_total:.2f}'.replace('.', ','))} m", ln=True)
+            pdf.cell(0, 8, f"Valor Bruto: {_format_brl(valor_bruto)}", ln=True)
+            if valor_ipi>0:
+                pdf.cell(0, 8, f"IPI: {_format_brl(valor_ipi)}", ln=True)
+            pdf.set_font("Arial", "B", 10)
+            pdf.cell(0, 8, f"Valor Total: {_format_brl(valor_final)}", ln=True)
+        pdf.ln(10)
+
+    # Observações
+    if observacao:
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(0, 11, "Observações", ln=True)
+        pdf.set_font("Arial", size=10)
+        pdf.multi_cell(largura_util, 10, str(observacao))
+        pdf.ln(10)
+
+    # Vendedor
+    if vendedor:
+        pdf.set_font("Arial", "", 10)
+        vendedor_txt = (
+            f"Vendedor: {vendedor.get('nome','')}\n"
+            f"Telefone: {vendedor.get('tel','')}\n"
+            f"E-mail: {vendedor.get('email','')}"
+        )
+        pdf.multi_cell(largura_util, 8, vendedor_txt)
+        pdf.ln(5)
+
+    # Retorna bytes do PDF
+    pdf_bytes = pdf.output(dest='S').encode('latin1')
+    return pdf_bytes
 
 # Inicialização do DB
 init_db()
