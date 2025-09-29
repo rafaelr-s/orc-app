@@ -786,7 +786,7 @@ if menu == "Histórico de Orçamentos":
 
                                 # Forçar mudar para menu "Novo Orçamento" e rerun
                                 st.session_state["menu"] = "Novo Orçamento"
-                                st.experimental_rerun()
+                                st.rerun()
 
                     with col2:
                         if os.path.exists(pdf_path):
