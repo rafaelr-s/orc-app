@@ -739,19 +739,18 @@ if menu == "Histórico de Orçamentos":
                     col1, col2, col3 = st.columns([1,1,1])
                     with col1:
                         if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
-        # Carregar dados do orçamento e preencher session_state
-                    if orc:
-            st.session_state["Cliente_nome"] = orc[2] or ""
-            st.session_state["Cliente_CNPJ"] = orc[3] or ""
-            st.session_state["tipo_cliente"] = orc[4] or " "
-            st.session_state["estado"] = orc[5] or list(icms_por_estado.keys())[0]
-            st.session_state["frete_sel"] = orc[6] or "CIF"
-            st.session_state["tipo_pedido"] = orc[7] or "Direta"
-            st.session_state["vend_nome"] = orc[8] or ""
-            st.session_state["vend_tel"] = orc[9] or ""
-            st.session_state["vend_email"] = orc[10] or ""
-            st.session_state["obs"] = orc[11] or ""
-
+                            if orc:
+                                st.session_state["Cliente_nome"] = orc[2] or ""
+                                st.session_state["Cliente_CNPJ"] = orc[3] or ""
+                                st.session_state["tipo_cliente"] = orc[4] or " "
+                                st.session_state["estado"] = orc[5] or list(icms_por_estado.keys())[0]
+                                st.session_state["frete_sel"] = orc[6] or "CIF"
+                                st.session_state["tipo_pedido"] = orc[7] or "Direta"
+                                st.session_state["vend_nome"] = orc[8] or ""
+                                st.session_state["vend_tel"] = orc[9] or ""
+                                st.session_state["vend_email"] = orc[10] or ""
+                                st.session_state["obs"] = orc[11] or ""
+                                
         # colocar itens em session_state (confeccionados e bobinas)
         st.session_state["itens_confeccionados"] = [
             {"produto": c[0], "comprimento": float(c[1]), "largura": float(c[2]), "quantidade": int(c[3]), "cor": c[4] or "", "preco_unitario": None}
