@@ -721,6 +721,7 @@ if menu == "Histórico de Orçamentos":
 
                     orc, confecc, bob = carregar_orcamento_por_id(orc_id)
 
+                    # Mostrar itens no histórico
                     if confecc:
                         st.markdown("### ⬛ Itens Confeccionados")
                         for c in confecc:
@@ -740,6 +741,7 @@ if menu == "Histórico de Orçamentos":
                     with col1:
                         if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
                             if orc:
+                                # Preencher session_state
                                 st.session_state["Cliente_nome"] = orc[2] or ""
                                 st.session_state["Cliente_CNPJ"] = orc[3] or ""
                                 st.session_state["tipo_cliente"] = orc[4] or " "
@@ -750,46 +752,55 @@ if menu == "Histórico de Orçamentos":
                                 st.session_state["vend_tel"] = orc[9] or ""
                                 st.session_state["vend_email"] = orc[10] or ""
                                 st.session_state["obs"] = orc[11] or ""
-                                
-        # colocar itens em session_state (confeccionados e bobinas)
-        st.session_state["itens_confeccionados"] = [
-            {"produto": c[0], "comprimento": float(c[1]), "largura": float(c[2]), "quantidade": int(c[3]), "cor": c[4] or "", "preco_unitario": None}
-            for c in confecc
-        ] if confecc else []
 
-        st.session_state["bobinas_adicionadas"] = [
-            {
-                "produto": b[0],
-                "comprimento": float(b[1]),
-                "largura": float(b[2]),
-                "quantidade": int(b[3]),
-                "cor": b[4] or "",
-                "espessura": float(b[5]) if (b[5] is not None) else None,
-                "preco_unitario": float(b[6]) if (b[6] is not None) else 0.0
-            }
-            for b in bob
-        ] if bob else []
+                                # Itens confeccionados
+                                st.session_state["itens_confeccionados"] = [
+                                    {
+                                        "produto": c[0],
+                                        "comprimento": float(c[1]),
+                                        "largura": float(c[2]),
+                                        "quantidade": int(c[3]),
+                                        "cor": c[4] or "",
+                                        "preco_unitario": st.session_state.get("preco_m2",0.0)
+                                    } for c in confecc
+                                ] if confecc else []
 
-        # Preencher preco_m2 com o último valor do orçamento
-        if st.session_state["itens_confeccionados"]:
-            st.session_state["preco_m2"] = st.session_state["itens_confeccionados"][0].get("preco_unitario", st.session_state.get("preco_m2", 0.0))
-        elif st.session_state["bobinas_adicionadas"]:
-            st.session_state["preco_m2"] = st.session_state["bobinas_adicionadas"][0].get("preco_unitario", st.session_state.get("preco_m2", 0.0))
-        else:
-            st.session_state["preco_m2"] = st.session_state.get("preco_m2", 0.0)
-        
-        with col2:
-            if os.path.exists(pdf_path):
-                with open(pdf_path, "rb") as f:
-                    st.download_button(
-                        "⬇️ Baixar PDF",
-                        f,
-                        file_name=pdf_path,
-                        mime="application/pdf",
-                        key=f"download_{orc_id}"
-                    )
-            else:
-                st.warning("PDF ainda não gerado.")
+                                # Itens bobinas
+                                st.session_state["bobinas_adicionadas"] = [
+                                    {
+                                        "produto": b[0],
+                                        "comprimento": float(b[1]),
+                                        "largura": float(b[2]),
+                                        "quantidade": int(b[3]),
+                                        "cor": b[4] or "",
+                                        "espessura": float(b[5]) if (b[5] is not None) else None,
+                                        "preco_unitario": float(b[6]) if (b[6] is not None) else st.session_state.get("preco_m2",0.0)
+                                    } for b in bob
+                                ] if bob else []
+
+                                # Atualizar preço padrão
+                                if st.session_state["itens_confeccionados"]:
+                                    st.session_state["preco_m2"] = st.session_state["itens_confeccionados"][0].get("preco_unitario",0.0)
+                                elif st.session_state["bobinas_adicionadas"]:
+                                    st.session_state["preco_m2"] = st.session_state["bobinas_adicionadas"][0].get("preco_unitario",0.0)
+
+                                # Forçar mudar para menu "Novo Orçamento" e rerun
+                                st.session_state["menu"] = "Novo Orçamento"
+                                st.experimental_rerun()
+
+                    with col2:
+                        if os.path.exists(pdf_path):
+                            with open(pdf_path, "rb") as f:
+                                st.download_button(
+                                    "⬇️ Baixar PDF",
+                                    f,
+                                    file_name=pdf_path,
+                                    mime="application/pdf",
+                                    key=f"download_{orc_id}"
+                                )
+                        else:
+                            st.warning("PDF ainda não gerado.")
+                            
 
     # Novo botão: exportar relatório Excel
     excel_file = exportar_excel(orcamentos)
