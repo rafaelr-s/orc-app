@@ -4,6 +4,25 @@ from datetime import datetime
 import pytz
 from fpdf import FPDF
 import sqlite3
+import pandas as pd
+from io import BytesIO
+
+def exportar_excel(orcamentos):
+    dados_export = []
+    for o in orcamentos:
+        id_orc, data_hora, cliente_nome, vendedor_nome = o
+        dados_export.append({
+            "ID Orçamento": id_orc,
+            "Data/Hora": data_hora,
+            "Cliente": cliente_nome,
+            "Vendedor": vendedor_nome
+        })
+    df = pd.DataFrame(dados_export)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Orçamentos")
+    output.seek(0)
+    return output
 
 # ============================
 # Funções de Banco de Dados
@@ -692,7 +711,6 @@ if menu == "Histórico de Orçamentos":
                         if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
                             # Carregar dados do orçamento e preencher session_state
                             if orc:
-                                # orc indices: 0:id,1:data_hora,2:cliente_nome,3:cliente_cnpj,4:tipo_cliente,5:estado,6:frete,7:tipo_pedido,8:vendedor_nome,9:vendedor_tel,10:vendedor_email,11:observacao
                                 st.session_state["Cliente_nome"] = orc[2] or ""
                                 st.session_state["Cliente_CNPJ"] = orc[3] or ""
                                 st.session_state["tipo_cliente"] = orc[4] or " "
@@ -723,12 +741,8 @@ if menu == "Histórico de Orçamentos":
                                 for b in bob
                             ] if bob else []
 
-                            # jump back to 'Novo Orçamento' tab and rerun to update widgets
-                            # (we set menu in session_state so next rerun opens that page)
+                            # Alterar menu para "Novo Orçamento" e recarregar
                             st.session_state["menu_selected"] = "Novo Orçamento"
-                            # Try to set sidebar selection by rerunning; Streamlit doesn't allow programmatic change of selectbox value,
-                            # so we simulate by telling user to click back OR we simply rerun and rely on our session_state
-                            st.success("Orçamento reaberto no formulário. Verifique os campos na aba 'Novo Orçamento'.")
                             st.rerun()
 
                     with col2:
@@ -744,7 +758,7 @@ if menu == "Histórico de Orçamentos":
                         else:
                             st.warning("PDF ainda não gerado.")
 
-# Novo botão: exportar relatório Excel
+    # Novo botão: exportar relatório Excel
     excel_file = exportar_excel(orcamentos)
     st.download_button(
         "📊 Exportar Relatório Excel",
