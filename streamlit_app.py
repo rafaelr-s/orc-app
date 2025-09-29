@@ -628,7 +628,7 @@ st.markdown("🔒 Os dados acima são apenas para inclusão no orçamento (PDF o
 # Página Histórico
 # ============================
 if menu == "Histórico de Orçamentos":
-    st.subheader("📋 Histórico de Orçamentos Salvos")
+    st.subheader("📋 Histórico de Orçamentos")
 
     orcamentos = buscar_orcamentos()
     if not orcamentos:
@@ -743,3 +743,14 @@ if menu == "Histórico de Orçamentos":
                                 )
                         else:
                             st.warning("PDF ainda não gerado.")
+
+# Novo botão: exportar relatório Excel
+    excel_file = exportar_excel(orcamentos)
+    st.download_button(
+        "📊 Exportar Relatório Excel",
+        data=excel_file,
+        file_name="relatorio_orcamentos.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+else:
+    st.info("Nenhum orçamento encontrado nos últimos 12 meses.")
