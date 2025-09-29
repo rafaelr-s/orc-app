@@ -37,7 +37,7 @@ def exportar_excel(orcamentos):
             "ID Orçamento": orc_id,
             "Data/Hora": data_hora,
             "Cliente": cliente_nome,
-            "Vendedor": vendedor_nome,
+            "Produto": produtos_lista,
             "Tipo Cliente": orc[4] if orc else "",
             "Estado": orc[5] if orc else "",
             "Tipo Pedido": orc[7] if orc else "",
