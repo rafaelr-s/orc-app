@@ -244,6 +244,7 @@ def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_con
     pdf.cell(0, 12, "Orçamento - Grupo Locomotiva", ln=True, align="C")
     pdf.ln(10)
     pdf.set_font("Arial", size=9)
+    pdf.cell(0, 10, f"Orçamento ID: {orcamento_id}", ln=True)
     brasilia_tz = pytz.timezone("America/Sao_Paulo")
     pdf.cell(0, 6, f"Data e Hora: {datetime.now(brasilia_tz).strftime('%d/%m/%Y %H:%M')}", ln=True)
     pdf.cell(0, 6, "Validade da Cotação: 7 dias corridos.", ln=True, align="L")
