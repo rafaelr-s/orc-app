@@ -31,20 +31,20 @@ def exportar_excel(orcamentos):
             continue
 
         dados_export.append({
-            "ID": orc[0],
-            "Data": orc[1],
-            "Cliente": orc[2],
-            "CNPJ/CPF": orc[3],
-            "Tipo Cliente": orc[4],
-            "Estado": orc[5],
-            "Tipo Pedido": orc[7],
-            "Nome do Produto": orc[10]
-            "Tipo do Produto": orc[13]
-            "Preço m²/metro linear": orc[12] if len(orc) > 12 else 0.0
-            "Valor final": orc[9],
-            "Frete": orc[6],
-            "Vendedor Nome": orc[8],
-            "Observações": orc[11],
+            "ID": orc[0] if len(orc) > 0 else "",
+            "Data": orc[1] if len(orc) > 1 else "",
+            "Cliente": orc[2] if len(orc) > 2 else "",
+            "CNPJ/CPF": orc[3] if len(orc) > 3 else "",
+            "Tipo Cliente": orc[4] if len(orc) > 4 else "",
+            "Estado": orc[5] if len(orc) > 5 else "",
+            "Tipo Pedido": orc[7] if len(orc) > 7 else "",
+            "Nome do Produto": orc[10] if len(orc) > 10 else "",
+            "Tipo do Produto": orc[13] if len(orc) > 13 else "",
+            "Preço m²/metro linear": orc[12] if len(orc) > 12 else 0.0,
+            "Valor final": orc[9] if len(orc) > 9 else 0.0,
+            "Frete": orc[6] if len(orc) > 6 else "",
+            "Vendedor Nome": orc[8] if len(orc) > 8 else "",
+            "Observações": orc[11] if len(orc) > 11 else "",
         })
 
     df = pd.DataFrame(dados_export)
@@ -53,7 +53,7 @@ def exportar_excel(orcamentos):
         df.to_excel(writer, index=False, sheet_name="Orçamentos")
     processed_data = output.getvalue()
     return processed_data
-
+    
 # ============================
 # Funções de Banco de Dados
 # ============================
