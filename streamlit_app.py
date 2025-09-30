@@ -8,243 +8,116 @@ import pandas as pd
 from io import BytesIO
 
 # ============================
-# Banco de Dados
+# Banco SQLite
 # ============================
 def init_db():
     conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
-
     cur.execute("""
         CREATE TABLE IF NOT EXISTS orcamentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            data_hora TEXT,
             cliente_nome TEXT,
             cliente_cnpj TEXT,
+            tipo_cliente TEXT,
+            estado TEXT,
+            frete TEXT,
+            tipo_pedido TEXT,
             vendedor_nome TEXT,
-            observacao TEXT,
-            valor_final REAL,
-            data TEXT
+            vendedor_tel TEXT,
+            vendedor_email TEXT,
+            observacao TEXT
         )
     """)
-
     cur.execute("""
         CREATE TABLE IF NOT EXISTS itens_confeccionados (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             orcamento_id INTEGER,
             produto TEXT,
-            quantidade REAL,
-            preco_unitario REAL,
-            total REAL,
-            FOREIGN KEY (orcamento_id) REFERENCES orcamentos (id)
+            comprimento REAL,
+            largura REAL,
+            quantidade INTEGER,
+            cor TEXT,
+            FOREIGN KEY (orcamento_id) REFERENCES orcamentos(id)
         )
     """)
-
     cur.execute("""
         CREATE TABLE IF NOT EXISTS itens_bobinas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             orcamento_id INTEGER,
             produto TEXT,
-            metragem REAL,
-            preco_metro REAL,
-            total REAL,
-            FOREIGN KEY (orcamento_id) REFERENCES orcamentos (id)
+            comprimento REAL,
+            largura REAL,
+            quantidade INTEGER,
+            cor TEXT,
+            espessura REAL,
+            preco_unitario REAL,
+            FOREIGN KEY (orcamento_id) REFERENCES orcamentos(id)
         )
     """)
-
     conn.commit()
     conn.close()
 
-# ============================
-# Funções do Banco
-# ============================
-def salvar_orcamento(cliente_nome, cliente_cnpj, vendedor_nome, observacao, valor_final, itens_conf, itens_bobinas):
+def salvar_orcamento(cliente, vendedor, itens_confeccionados, itens_bobinas, observacao):
     conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
 
-    data = datetime.now(pytz.timezone("America/Sao_Paulo")).strftime("%Y-%m-%d %H:%M")
-
     cur.execute("""
-        INSERT INTO orcamentos (cliente_nome, cliente_cnpj, vendedor_nome, observacao, valor_final, data)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (cliente_nome, cliente_cnpj, vendedor_nome, observacao, valor_final, data))
+        INSERT INTO orcamentos (data_hora, cliente_nome, cliente_cnpj, tipo_cliente, estado, frete, tipo_pedido, vendedor_nome, vendedor_tel, vendedor_email, observacao)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        datetime.now(pytz.timezone("America/Sao_Paulo")).strftime("%d/%m/%Y %H:%M"),
+        cliente.get("nome",""),
+        cliente.get("cnpj",""),
+        cliente.get("tipo_cliente",""),
+        cliente.get("estado",""),
+        cliente.get("frete",""),
+        cliente.get("tipo_pedido",""),
+        vendedor.get("nome",""),
+        vendedor.get("tel",""),
+        vendedor.get("email",""),
+        observacao
+    ))
     orcamento_id = cur.lastrowid
 
-    for item in itens_conf:
+    for item in itens_confeccionados:
         cur.execute("""
-            INSERT INTO itens_confeccionados (orcamento_id, produto, quantidade, preco_unitario, total)
-            VALUES (?, ?, ?, ?, ?)
-        """, (orcamento_id, item["produto"], item["quantidade"], item["preco_unitario"], item["total"]))
+            INSERT INTO itens_confeccionados (orcamento_id, produto, comprimento, largura, quantidade, cor)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (orcamento_id, item['produto'], item['comprimento'], item['largura'], item['quantidade'], item.get('cor','')))
 
     for item in itens_bobinas:
         cur.execute("""
-            INSERT INTO itens_bobinas (orcamento_id, produto, metragem, preco_metro, total)
-            VALUES (?, ?, ?, ?, ?)
-        """, (orcamento_id, item["produto"], item["metragem"], item["preco_metro"], item["total"]))
+            INSERT INTO itens_bobinas (orcamento_id, produto, comprimento, largura, quantidade, cor, espessura, preco_unitario)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (orcamento_id, item['produto'], item['comprimento'], item['largura'], item['quantidade'], item.get('cor',''), item.get('espessura'), item.get('preco_unitario')))
 
     conn.commit()
     conn.close()
     return orcamento_id
 
-def carregar_orcamentos():
+def buscar_orcamentos():
     conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
-    cur.execute("SELECT * FROM orcamentos ORDER BY id DESC")
+    cur.execute("SELECT id, data_hora, cliente_nome, vendedor_nome FROM orcamentos ORDER BY id DESC")
     rows = cur.fetchall()
     conn.close()
     return rows
 
-# ============================
-# Exportar Excel
-# ============================
-def exportar_excel(orcamentos):
-    dados_export = []
-    for orc in orcamentos:
-        dados_export.append({
-            "ID Orçamento": orc[0],
-            "Cliente": orc[1],
-            "CNPJ/CPF": orc[2],
-            "Vendedor": orc[3],
-            "Observação": orc[4],
-            "Valor Final (R$)": orc[5],
-            "Data": orc[6],
-        })
-
-    df = pd.DataFrame(dados_export)
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Orçamentos")
-    return output.getvalue()
+def carregar_orcamento_por_id(orcamento_id):
+    conn = sqlite3.connect("orcamentos.db")
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM orcamentos WHERE id=?", (orcamento_id,))
+    orc = cur.fetchone()
+    cur.execute("SELECT produto, comprimento, largura, quantidade, cor FROM itens_confeccionados WHERE orcamento_id=?", (orcamento_id,))
+    confecc = cur.fetchall()
+    cur.execute("SELECT produto, comprimento, largura, quantidade, cor, espessura, preco_unitario FROM itens_bobinas WHERE orcamento_id=?", (orcamento_id,))
+    bob = cur.fetchall()
+    conn.close()
+    return orc, confecc, bob
 
 # ============================
-# Gerar PDF
-# ============================
-def gerar_pdf(orcamento_id, cliente_nome, cliente_cnpj, vendedor_nome, observacao, valor_final, itens_conf, itens_bobinas):
-    pdf = FPDF()
-    pdf.add_page()
-
-    pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, f"Orçamento - Grupo Locomotiva (ID: {orcamento_id})", ln=True, align="C")
-    pdf.ln(5)
-
-    pdf.set_font("Arial", "", 12)
-    pdf.cell(0, 10, f"Cliente: {cliente_nome}", ln=True)
-    pdf.cell(0, 10, f"CNPJ/CPF: {cliente_cnpj}", ln=True)
-    pdf.cell(0, 10, f"Vendedor: {vendedor_nome}", ln=True)
-    pdf.cell(0, 10, f"Observação: {observacao}", ln=True)
-    pdf.ln(5)
-
-    if itens_conf:
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, "Itens Confeccionados", ln=True)
-        pdf.set_font("Arial", "", 11)
-        for item in itens_conf:
-            pdf.cell(0, 8, f"{item['produto']} - {item['quantidade']} un x R${item['preco_unitario']} = R${item['total']}", ln=True)
-
-    if itens_bobinas:
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, "Itens Bobinas", ln=True)
-        pdf.set_font("Arial", "", 11)
-        for item in itens_bobinas:
-            pdf.cell(0, 8, f"{item['produto']} - {item['metragem']} m x R${item['preco_metro']} = R${item['total']}", ln=True)
-
-    pdf.ln(5)
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, f"Valor Final: R$ {valor_final}", ln=True)
-
-    pdf_bytes = BytesIO()
-    pdf.output(pdf_bytes, "F")
-    pdf_bytes.seek(0)
-    return pdf_bytes
-
-# ============================
-# App Streamlit
-# ============================
-def main():
-    st.sidebar.title("Menu")
-    menu = st.sidebar.radio("Navegação", ["Novo Orçamento", "📋 Histórico de Orçamentos"])
-
-    init_db()
-
-    if menu == "Novo Orçamento":
-        st.title("Orçamento - Grupo Locomotiva")
-
-        cliente_nome = st.text_input("Nome do Cliente")
-        cliente_cnpj = st.text_input("CNPJ/CPF do Cliente")
-        vendedor_nome = st.text_input("Nome do Vendedor")
-        observacao = st.text_area("Observações")
-
-        st.subheader("Itens Confeccionados")
-        itens_conf = []
-        if st.button("Adicionar Item Confeccionado"):
-            itens_conf.append({"produto": "Lona Confeccionada", "quantidade": 10, "preco_unitario": 50, "total": 500})
-
-        st.subheader("Itens Bobinas")
-        itens_bobinas = []
-        if st.button("Adicionar Item Bobina"):
-            itens_bobinas.append({"produto": "Bobina PVC", "metragem": 20, "preco_metro": 30, "total": 600})
-
-        valor_final = sum(item["total"] for item in itens_conf) + sum(item["total"] for item in itens_bobinas)
-
-        st.subheader("Resumo do Orçamento")
-        st.write(f"Cliente: {cliente_nome}")
-        st.write(f"CNPJ/CPF: {cliente_cnpj}")
-        st.write(f"Vendedor: {vendedor_nome}")
-        st.write(f"Observação: {observacao}")
-        st.write(f"Valor Final: R$ {valor_final}")
-
-        if st.button("Salvar Orçamento"):
-            orcamento_id = salvar_orcamento(cliente_nome, cliente_cnpj, vendedor_nome, observacao, valor_final, itens_conf, itens_bobinas)
-            st.success(f"Orçamento {orcamento_id} salvo com sucesso!")
-
-            pdf_bytes = gerar_pdf(orcamento_id, cliente_nome, cliente_cnpj, vendedor_nome, observacao, valor_final, itens_conf, itens_bobinas)
-            st.download_button("⬇️ Baixar PDF", pdf_bytes, file_name=f"orcamento_{orcamento_id}.pdf")
-
-    elif menu == "📋 Histórico de Orçamentos":
-        st.title("📋 Histórico de Orçamentos Salvos")
-        orcamentos = carregar_orcamentos()
-
-        if orcamentos:
-            df = pd.DataFrame(orcamentos, columns=["ID", "Cliente", "CNPJ/CPF", "Vendedor", "Observação", "Valor Final", "Data"])
-
-            # ---- Filtros ----
-            with st.expander("🔎 Filtros de Busca"):
-                cliente_filtro = st.text_input("Buscar por Cliente", key="filtro_cliente")
-                cnpj_filtro = st.text_input("Buscar por CNPJ/CPF", key="filtro_cnpj")
-                col1, col2 = st.columns(2)
-                with col1:
-                    data_inicio = st.date_input("Data Inicial", value=None, key="filtro_data_ini")
-                with col2:
-                    data_fim = st.date_input("Data Final", value=None, key="filtro_data_fim")
-
-                if st.button("Limpar Filtros"):
-                    st.session_state["filtro_cliente"] = ""
-                    st.session_state["filtro_cnpj"] = ""
-                    st.session_state["filtro_data_ini"] = None
-                    st.session_state["filtro_data_fim"] = None
-                    st.experimental_rerun()
-
-            # Aplicar filtros
-            if cliente_filtro:
-                df = df[df["Cliente"].str.contains(cliente_filtro, case=False, na=False)]
-            if cnpj_filtro:
-                df = df[df["CNPJ/CPF"].str.contains(cnpj_filtro, case=False, na=False)]
-            if data_inicio and data_fim:
-                df["Data_fmt"] = pd.to_datetime(df["Data"], errors="coerce")
-                df = df[(df["Data_fmt"].dt.date >= data_inicio) & (df["Data_fmt"].dt.date <= data_fim)]
-                df.drop(columns=["Data_fmt"], inplace=True)
-
-            st.dataframe(df)
-
-            excel_file = exportar_excel(df.values.tolist())
-            st.download_button("⬇️ Exportar Excel", excel_file, file_name="orcamentos.xlsx")
-
-        else:
-            st.info("Nenhum orçamento salvo até o momento.")
-
-if __name__ == "__main__":
-    main()
-
-# ============================
-# Função de formatação R$
+# Formatação R$
 # ============================
 def _format_brl(v):
     try:
@@ -255,7 +128,7 @@ def _format_brl(v):
 # ============================
 # Cálculos (pequenas proteções)
 # ============================
-st_por_estado = {}
+st_por_estado = {}  # declarado cedo, depois definido mais abaixo
 
 def calcular_valores_confeccionados(itens, preco_m2, tipo_cliente="", estado="", tipo_pedido="Direta"):
     if not itens:
@@ -280,23 +153,19 @@ def calcular_valores_confeccionados(itens, preco_m2, tipo_cliente="", estado="",
 
     return m2_total, valor_bruto, valor_ipi, valor_final, valor_st, aliquota_st
 
-
 def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
     if not itens:
         return 0.0, 0.0, 0.0, 0.0
-
-    produtos_sem_ipi = ["Acrylic", "Agora", "Tela de Sombreamento", "Encerado"]
-
+    # m_total: soma dos metros (comprimento * quantidade)
     m_total = sum(item['comprimento'] * item['quantidade'] for item in itens)
-
+    # valor bruto: usar preco_unitario se NÃO for None, senão usar preco_m2
     def preco_item_of(item):
-        pu = item.get('preco_unitario')
+        pu = item.get('preco_unitario')  # pode ser None
         return pu if (pu is not None) else preco_m2
 
     valor_bruto = sum((item['comprimento'] * item['quantidade']) * preco_item_of(item) for item in itens)
 
-    # Verifica se algum item está isento de IPI
-    if tipo_pedido == "Industrialização" or all(item['produto'] in produtos_sem_ipi for item in itens):
+    if tipo_pedido == "Industrialização":
         valor_ipi = 0
         valor_final = valor_bruto
     else:
@@ -304,6 +173,162 @@ def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
         valor_final = valor_bruto + valor_ipi
 
     return m_total, valor_bruto, valor_ipi, valor_final
+
+# ============================
+# Função para gerar PDF (retorna bytes)
+# ============================
+def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_conf, resumo_bob, observacao, preco_m2, tipo_cliente="", estado=""):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_font("Arial", "B", 14)
+
+    # Cabeçalho
+    pdf.cell(0, 12, "Orçamento - Grupo Locomotiva", ln=True, align="C")
+    pdf.ln(10)
+    pdf.set_font("Arial", size=9)
+    brasilia_tz = pytz.timezone("America/Sao_Paulo")
+    pdf.cell(0, 6, f"Data e Hora: {datetime.now(brasilia_tz).strftime('%d/%m/%Y %H:%M')}", ln=True)
+    pdf.cell(0, 6, "Validade da Cotação: 7 dias corridos.", ln=True, align="L")
+    pdf.ln(4)
+
+    # Dados do Cliente
+    pdf.set_font("Arial", "B", 11)
+    pdf.cell(0, 6, "Cliente", ln=True)
+    pdf.set_font("Arial", size=10)
+    largura_util = pdf.w - 2*pdf.l_margin
+
+    for chave in ["nome", "cnpj", "tipo_cliente", "estado", "frete", "tipo_pedido"]:
+        valor = str(cliente.get(chave, "") or "")
+        if valor.strip():
+            pdf.cell(0, 6, f"{chave.replace('_',' ').title()}: {valor}", align="L")
+            pdf.ln(5)
+    pdf.ln(5)
+
+    # Itens Confeccionados
+    if itens_confeccionados:
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(0, 8, "Itens Confeccionados", ln=True)
+        pdf.set_font("Arial", size=8)
+        for item in itens_confeccionados:
+            area_item = item['comprimento'] * item['largura'] * item['quantidade']
+            valor_item = area_item * preco_m2
+            txt = (
+                f"{item['quantidade']}x {item['produto']} - {item['comprimento']}m x {item['largura']}m "
+                f"| Cor: {item.get('cor','')} | Valor Bruto: {_format_brl(valor_item)}"
+            )
+            pdf.multi_cell(largura_util, 6, txt)
+            pdf.ln(1)
+
+    # Resumo Confeccionados
+    if resumo_conf:
+        m2_total, valor_bruto, valor_ipi, valor_final, valor_st, aliquota_st = resumo_conf
+        pdf.ln(3)
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(0, 10, "Resumo - Confeccionados", ln=True)
+        pdf.set_font("Arial", "", 10)
+        pdf.cell(0, 8, f"Preço por m² utilizado: {_format_brl(preco_m2)}", ln=True)
+        pdf.cell(0, 8, f"Área Total: {str(f'{m2_total:.2f}'.replace('.', ','))} m²", ln=True)
+        pdf.cell(0, 8, f"Valor Bruto: {_format_brl(valor_bruto)}", ln=True)
+        if valor_ipi>0:
+            pdf.cell(0, 8, f"IPI: {_format_brl(valor_ipi)}", ln=True)
+        if valor_st>0:
+            pdf.cell(0, 8, f"ST ({aliquota_st}%): {_format_brl(valor_st)}", ln=True)
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(0, 8, f"Valor Total: {_format_brl(valor_final)}", ln=True)
+        pdf.set_font("Arial", "", 10)
+        pdf.ln(10)
+
+    # Itens Bobinas
+    if itens_bobinas:
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(0, 8, "Itens Bobina", ln=True)
+        pdf.set_font("Arial", size=8)
+        for item in itens_bobinas:
+            metros_item = item['comprimento'] * item['quantidade']
+            preco_item = item.get('preco_unitario') if item.get('preco_unitario') is not None else preco_m2
+            valor_item = metros_item * preco_item
+            txt = (
+                f"{item['quantidade']}x {item['produto']} - {item['comprimento']}m | Largura: {item['largura']}m "
+                f"| Cor: {item.get('cor','')} | Valor Bruto: {_format_brl(valor_item)}"
+            )
+            if "espessura" in item and item.get('espessura') is not None:
+                esp = f"{item['espessura']:.2f}".replace(".", ",")
+                txt += f" | Esp: {esp} mm"
+                txt += f" | Preço metro: {_format_brl(preco_item)}"
+            pdf.multi_cell(largura_util, 6, txt)
+            pdf.ln(1)
+
+        if resumo_bob:
+            m_total, valor_bruto, valor_ipi, valor_final = resumo_bob
+            pdf.ln(3)
+            pdf.set_font("Arial", "B", 11)
+            pdf.cell(0, 10, "Resumo - Bobinas", ln=True)
+            pdf.set_font("Arial", "", 10)
+            pdf.cell(0, 8, f"Total de Metros Lineares: {str(f'{m_total:.2f}'.replace('.', ','))} m", ln=True)
+            pdf.cell(0, 8, f"Valor Bruto: {_format_brl(valor_bruto)}", ln=True)
+            if valor_ipi>0:
+                pdf.cell(0, 8, f"IPI: {_format_brl(valor_ipi)}", ln=True)
+            pdf.set_font("Arial", "B", 10)
+            pdf.cell(0, 8, f"Valor Total: {_format_brl(valor_final)}", ln=True)
+        pdf.ln(10)
+
+    # Observações
+    if observacao:
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(0, 11, "Observações", ln=True)
+        pdf.set_font("Arial", size=10)
+        pdf.multi_cell(largura_util, 10, str(observacao))
+        pdf.ln(10)
+
+    # Vendedor
+    if vendedor:
+        pdf.set_font("Arial", "", 10)
+        vendedor_txt = (
+            f"Vendedor: {vendedor.get('nome','')}\n"
+            f"Telefone: {vendedor.get('tel','')}\n"
+            f"E-mail: {vendedor.get('email','')}"
+        )
+        pdf.multi_cell(largura_util, 8, vendedor_txt)
+        pdf.ln(5)
+
+    # Retorna bytes do PDF
+    pdf_bytes = pdf.output(dest='S').encode('latin1')
+    return pdf_bytes
+
+# ============================
+# Inicialização
+# ============================
+init_db()
+
+# session state defaults for form fields (so reabrir can populate)
+defaults = {
+    "Cliente_nome": "",
+    "Cliente_CNPJ": "",
+    "tipo_cliente": " ",
+    "estado": None,
+    "tipo_pedido": "Direta",
+    "preco_m2": 0.0,
+    "itens_confeccionados": [],
+    "bobinas_adicionadas": [],
+    "frete_sel": "CIF",
+    "obs": "",
+    "vend_nome": "",
+    "vend_tel": "",
+    "vend_email": ""
+}
+for k, v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
+
+# ============================
+# Configuração Streamlit
+# ============================
+st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", layout="centered")
+st.title("Orçamento - Grupo Locomotiva")
+
+# --- Menu ---
+menu = st.sidebar.selectbox("Menu", ["Novo Orçamento","Histórico de Orçamentos"], index=0)
 
 # ============================
 # Tabelas de ICMS e ST
@@ -327,54 +352,12 @@ st_por_estado = {
 }
 
 # ============================
-# Página - Novo Orçamento
+# Interface - Novo Orçamento
 # ============================
 if menu == "Novo Orçamento":
     brasilia_tz = pytz.timezone("America/Sao_Paulo")
     data_hora_brasilia = datetime.now(brasilia_tz).strftime("%d/%m/%Y %H:%M")
     st.markdown(f"🕒 **Data e Hora:** {data_hora_brasilia}")
-
-    # Se existe pedido para reabrir um orçamento, carrega os dados no session_state (evita conflito no DOM)
-    if st.session_state.get("reabrir_id") is not None and st.session_state.get("menu_selected") == "Novo Orçamento":
-        orc_id_to_reopen = st.session_state.get("reabrir_id")
-        orc, confecc, bob = carregar_orcamento_por_id(orc_id_to_reopen)
-        if orc:
-            st.session_state["Cliente_nome"] = orc[2] or ""
-            st.session_state["Cliente_CNPJ"] = orc[3] or ""
-            st.session_state["tipo_cliente"] = orc[4] or " "
-            st.session_state["estado"] = orc[5] or list(icms_por_estado.keys())[0]
-            st.session_state["frete_sel"] = orc[6] or "CIF"
-            st.session_state["tipo_pedido"] = orc[7] or "Direta"
-            st.session_state["vend_nome"] = orc[8] or ""
-            st.session_state["obs"] = orc[11] or ""
-            st.session_state["preco_m2"] = float(orc[12]) if len(orc) > 12 and orc[12] is not None else 0.0
-
-            st.session_state["itens_confeccionados"] = [
-                {
-                    "produto": c[0],
-                    "comprimento": float(c[1]),
-                    "largura": float(c[2]),
-                    "quantidade": int(c[3]),
-                    "cor": c[4] or "",
-                }
-                for c in confecc
-            ] if confecc else []
-
-            st.session_state["bobinas_adicionadas"] = [
-                {
-                    "produto": b[0],
-                    "comprimento": float(b[1]),
-                    "largura": float(b[2]),
-                    "quantidade": int(b[3]),
-                    "cor": b[4] or "",
-                    "espessura": float(b[5]) if b[5] is not None else None,
-                    "preco_unitario": float(b[6]) if b[6] is not None else None,
-                }
-                for b in bob
-            ] if bob else []
-
-        # Limpa a flag para não recarregar novamente
-        st.session_state["reabrir_id"] = None
 
     # Cliente
     st.subheader("👤 Dados do Cliente")
@@ -445,11 +428,9 @@ if menu == "Novo Orçamento":
                 'quantidade': int(quantidade),
                 'cor': ""
             })
-            st.rerun()
 
         if st.session_state['itens_confeccionados']:
             st.subheader("📋 Itens Adicionados")
-            to_remove_conf = None  # marcar item a remover
             for idx, item in enumerate(st.session_state['itens_confeccionados'][:] ):
                 col1, col2, col3, col4 = st.columns([3,2,2,1])
                 with col1:
@@ -464,14 +445,10 @@ if menu == "Novo Orçamento":
                     cor = st.text_input("Cor:", value=item['cor'], key=f"cor_conf_{idx}")
                     st.session_state['itens_confeccionados'][idx]['cor'] = cor
                 with col4:
-                    if st.button("❌", key=f"remover_conf_{idx}"):
-                        to_remove_conf = idx
-
-            # só remover e rerun depois do loop
-            if to_remove_conf is not None:
-                st.session_state['itens_confeccionados'].pop(to_remove_conf)
-                st.rerun()
-
+                    remover = st.button("❌", key=f"remover_conf_{idx}")
+                    if remover:
+                        st.session_state['itens_confeccionados'].pop(idx)
+                        st.rerun()
         if st.button("🧹 Limpar Itens", key="limpar_conf"):
             st.session_state['itens_confeccionados'] = []
             st.rerun()
@@ -513,59 +490,54 @@ if menu == "Novo Orçamento":
                 'comprimento': float(comprimento),
                 'largura': float(largura_bobina),
                 'quantidade': int(quantidade),
-                'cor': "",
-                'espessura': float(espessura_bobina) if espessura_bobina is not None else None,
-                'preco_unitario': preco_m2
+                'cor': ""
             }
+            if espessura_bobina is not None:
+                item_bobina['espessura'] = float(espessura_bobina)
+                item_bobina['preco_unitario'] = preco_m2
             st.session_state['bobinas_adicionadas'].append(item_bobina)
-            st.rerun()
 
         if st.session_state['bobinas_adicionadas']:
             st.subheader("📋 Bobinas Adicionadas")
-            to_remove_bob = None
             for idx, item in enumerate(st.session_state['bobinas_adicionadas'][:] ):
-                metros_item = item['comprimento'] * item['quantidade']
-                preco_item = item.get('preco_unitario') if item.get('preco_unitario') is not None else preco_m2
-                valor_item = metros_item * preco_item
-
-                col1, col2, col3 = st.columns([4, 3, 1])
+                col1, col2, col3, col4 = st.columns([4,2,2,1])
                 with col1:
-                    st.markdown(f"**{item['produto']}**")
-                    st.markdown(
-                        f"🔹 {item['quantidade']}x {item['comprimento']:.2f} m "
-                        f"→ {metros_item:.2f} m | {_format_brl(valor_item)}"
+                    metros_item = item['comprimento'] * item['quantidade']
+                    valor_item = metros_item * (item.get('preco_unitario') if item.get('preco_unitario') is not None else preco_m2)
+                    detalhes = (
+                        f"🔹 {item['quantidade']}x {item['comprimento']:.2f}m | Largura: {item['largura']:.2f}m "
+                        f"= {metros_item:.2f} m → {_format_brl(valor_item)}"
                     )
+                    if 'espessura' in item and item.get('espessura') is not None:
+                        detalhes += f" | Esp: {item['espessura']:.2f}mm"
+                        detalhes += f" | unit: {_format_brl(item.get('preco_unitario', preco_m2))}"
+                    st.markdown(f"**{item['produto']}**")
+                    st.markdown(detalhes)
                 with col2:
                     cor = st.text_input("Cor:", value=item['cor'], key=f"cor_bob_{idx}")
                     st.session_state['bobinas_adicionadas'][idx]['cor'] = cor
-                with col3:
-                    if st.button("❌", key=f"remover_bob_{idx}"):
-                        to_remove_bob = idx
+                with col4:
+                    remover = st.button("❌", key=f"remover_bob_{idx}")
+                    if remover:
+                        st.session_state['bobinas_adicionadas'].pop(idx)
+                        st.rerun()
 
-            # remover apenas após o loop
-            if to_remove_bob is not None:
-                st.session_state['bobinas_adicionadas'].pop(to_remove_bob)
-                st.rerun()
-
-            # botão de limpar deve ficar fora do loop (único widget com a key "limpar_bob")
-            if st.button("🧹 Limpar Bobinas", key="limpar_bob"):
-                st.session_state['bobinas_adicionadas'] = []
-                st.rerun()
-
-        if st.session_state['bobinas_adicionadas']:
-            m_total, valor_bruto, valor_ipi, valor_final = calcular_valores_bobinas(
+            m_total, valor_bruto_bob, valor_ipi_bob, valor_final_bob = calcular_valores_bobinas(
                 st.session_state['bobinas_adicionadas'], preco_m2, tipo_pedido
             )
             st.markdown("---")
             st.success("💰 **Resumo do Pedido - Bobinas**")
-            st.write(f"📏 Total de Metros: **{m_total:.2f} m**".replace(".", ","))
-            st.write(f"💵 Valor Bruto: **{_format_brl(valor_bruto)}**")
+            st.write(f"📏 Total de Metros Lineares: **{m_total:.2f} m**".replace(".", ","))
+            st.write(f"💵 Valor Bruto: **{_format_brl(valor_bruto_bob)}**")
             if tipo_pedido != "Industrialização":
-                st.write(f"🧾 IPI (9.75%): **{_format_brl(valor_ipi)}**")
-                st.write(f"💰 Valor Final com IPI: **{_format_brl(valor_final)}**")
+                st.write(f"🧾 IPI (9.75%): **{_format_brl(valor_ipi_bob)}**")
+                st.write(f"💰 Valor Final com IPI (9.75%): **{_format_brl(valor_final_bob)}**")
             else:
-                st.write(f"💰 Valor Final: **{_format_brl(valor_final)}**")
-                
+                st.write(f"💰 Valor Final: **{_format_brl(valor_final_bob)}**")
+
+            if st.button("🧹 Limpar Bobinas", key="limpar_bob"):
+                st.session_state['bobinas_adicionadas'] = []
+                st.rerun()
 
     # Tipo de frete / observações / vendedor (com chaves para session_state)
     st.markdown("---")
@@ -599,14 +571,13 @@ if menu == "Novo Orçamento":
             "email": st.session_state.get("vend_email","")
         }
 
-        # Salvar (agora passando preco_m2)
+        # Salvar
         orcamento_id = salvar_orcamento(
             cliente,
             vendedor,
             st.session_state["itens_confeccionados"],
             st.session_state["bobinas_adicionadas"],
-            st.session_state.get("obs",""),
-            preco_m2=st.session_state.get("preco_m2", 0.0)
+            st.session_state.get("obs","")
         )
         st.success(f"✅ Orçamento salvo com ID {orcamento_id}")
 
@@ -614,9 +585,8 @@ if menu == "Novo Orçamento":
         resumo_conf = calcular_valores_confeccionados(st.session_state["itens_confeccionados"], st.session_state.get("preco_m2",0.0), st.session_state.get("tipo_cliente"," "), st.session_state.get("estado",""), st.session_state.get("tipo_pedido","Direta")) if st.session_state["itens_confeccionados"] else None
         resumo_bob = calcular_valores_bobinas(st.session_state["bobinas_adicionadas"], st.session_state.get("preco_m2",0.0), st.session_state.get("tipo_pedido","Direta")) if st.session_state["bobinas_adicionadas"] else None
 
-        # Gerar PDF bytes (agora passando orcamento_id como primeiro arg)
+        # Gerar PDF bytes
         pdf_bytes = gerar_pdf(
-            orcamento_id,
             cliente,
             vendedor,
             st.session_state["itens_confeccionados"],
@@ -643,7 +613,140 @@ if menu == "Novo Orçamento":
             mime="application/pdf",
             key=f"download_generated_{orcamento_id}"
         )
-st.markdown("🔒 Os dados acima são apenas para inclusão no orçamento (PDF ou impressão futura).")
+
+# ============================
+# Página de Histórico
+# ============================
+if menu == "Histórico de Orçamentos":
+    st.subheader("📋 Histórico de Orçamentos Salvos")
+
+    orcamentos = buscar_orcamentos()
+    if not orcamentos:
+        st.info("Nenhum orçamento encontrado.")
+    else:
+        # filtros simples
+        clientes = sorted(list({o[2] for o in orcamentos if o[2]}))
+        cliente_filtro = st.selectbox("Filtrar por cliente:", ["Todos"] + clientes, key="filtro_cliente")
+
+        datas = [datetime.strptime(o[1], "%d/%m/%Y %H:%M") for o in orcamentos]
+        min_data, max_data = min(datas), max(datas)
+        data_inicio, data_fim = st.date_input(
+            "Filtrar por intervalo de datas:",
+            (min_data.date(), max_data.date()),
+            min_value=min_data.date(),
+            max_value=max_data.date(),
+            key="filtro_datas"
+        )
+
+        orcamentos_filtrados = []
+        for o in orcamentos:
+            orc_id, data_hora, cliente_nome, vendedor_nome = o
+            data_obj = datetime.strptime(data_hora, "%d/%m/%Y %H:%M")
+
+            cliente_ok = (cliente_filtro == "Todos" or cliente_nome == cliente_filtro)
+            data_ok = (data_inicio <= data_obj.date() <= data_fim)
+
+            if cliente_ok and data_ok:
+                orcamentos_filtrados.append(o)
+
+        if not orcamentos_filtrados:
+            st.warning("Nenhum orçamento encontrado com os filtros selecionados.")
+        else:
+            for o in orcamentos_filtrados:
+                orc_id, data_hora, cliente_nome, vendedor_nome = o
+                pdf_path = f"orcamento_{orc_id}.pdf"
+
+                with st.expander(f"📝 ID {orc_id} - {cliente_nome} ({data_hora})"):
+                    st.markdown(f"**👤 Cliente:** {cliente_nome}")
+                    st.markdown(f"**🗣️ Vendedor:** {vendedor_nome}")
+
+                    orc, confecc, bob = carregar_orcamento_por_id(orc_id)
+
+                    if confecc:
+                        st.markdown("### ⬛ Itens Confeccionados")
+                        for c in confecc:
+                            st.markdown(
+                                f"- **{c[0]}**: {c[3]}x {c[1]:.2f}m x {c[2]:.2f}m | Cor: {c[4]}"
+                            )
+
+                    if bob:
+                        st.markdown("### 🔘 Itens Bobinas")
+                        for b in bob:
+                            esp = f" | Esp: {b[5]:.2f}mm" if (b[5] is not None) else ""
+                            st.markdown(
+                                f"- **{b[0]}**: {b[3]}x {b[1]:.2f}m | Largura: {b[2]:.2f}m{esp} | Cor: {b[4]}"
+                            )
+
+                    col1, col2, col3 = st.columns([1,1,1])
+                    with col1:
+                        if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
+                            # Carregar dados do orçamento e preencher session_state
+                            if orc:
+                                # orc indices: 0:id,1:data_hora,2:cliente_nome,3:cliente_cnpj,4:tipo_cliente,5:estado,6:frete,7:tipo_pedido,8:vendedor_nome,9:vendedor_tel,10:vendedor_email,11:observacao
+                                st.session_state["Cliente_nome"] = orc[2] or ""
+                                st.session_state["Cliente_CNPJ"] = orc[3] or ""
+                                st.session_state["tipo_cliente"] = orc[4] or " "
+                                st.session_state["estado"] = orc[5] or list(icms_por_estado.keys())[0]
+                                st.session_state["frete_sel"] = orc[6] or "CIF"
+                                st.session_state["tipo_pedido"] = orc[7] or "Direta"
+                                st.session_state["vend_nome"] = orc[8] or ""
+                                st.session_state["vend_tel"] = orc[9] or ""
+                                st.session_state["vend_email"] = orc[10] or ""
+                                st.session_state["obs"] = orc[11] or ""
+
+                            # colocar itens em session_state (confeccionados e bobinas)
+                            st.session_state["itens_confeccionados"] = [
+                                {"produto": c[0], "comprimento": float(c[1]), "largura": float(c[2]), "quantidade": int(c[3]), "cor": c[4] or ""}
+                                for c in confecc
+                            ] if confecc else []
+
+                            st.session_state["bobinas_adicionadas"] = [
+                                {
+                                    "produto": b[0],
+                                    "comprimento": float(b[1]),
+                                    "largura": float(b[2]),
+                                    "quantidade": int(b[3]),
+                                    "cor": b[4] or "",
+                                    "espessura": float(b[5]) if (b[5] is not None) else None,
+                                    "preco_unitario": float(b[6]) if (b[6] is not None) else None
+                                }
+                                for b in bob
+                            ] if bob else []
+
+                            # jump back to 'Novo Orçamento' tab and rerun to update widgets
+                            # (we set menu in session_state so next rerun opens that page)
+                            st.session_state["menu_selected"] = "Novo Orçamento"
+                            # Try to set sidebar selection by rerunning; Streamlit doesn't allow programmatic change of selectbox value,
+                            # so we simulate by telling user to click back OR we simply rerun and rely on our session_state
+                            st.success("Orçamento reaberto no formulário. Verifique os campos na aba 'Novo Orçamento'.")
+                            st.rerun()
+
+                    with col2:
+                        if os.path.exists(pdf_path):
+                            with open(pdf_path, "rb") as f:
+                                st.download_button(
+                                    "⬇️ Baixar PDF",
+                                    f,
+                                    file_name=pdf_path,
+                                    mime="application/pdf",
+                                    key=f"download_{orc_id}"
+                                )
+                        else:
+                            st.warning("PDF ainda não gerado.")
+
+                    with col3:
+                        if st.button("❌ Excluir", key=f"excluir_{orc_id}"):
+                            conn = sqlite3.connect("orcamentos.db")
+                            cur = conn.cursor()
+                            cur.execute("DELETE FROM orcamentos WHERE id=?", (orc_id,))
+                            cur.execute("DELETE FROM itens_confeccionados WHERE orcamento_id=?", (orc_id,))
+                            cur.execute("DELETE FROM itens_bobinas WHERE orcamento_id=?", (orc_id,))
+                            conn.commit()
+                            conn.close()
+                            if os.path.exists(pdf_path):
+                                os.remove(pdf_path)
+                            st.success(f"Orçamento ID {orc_id} excluído!")
+                            st.rerun()
 
             # Botão exportar Excel (fora do loop, exporta os filtrados)
             excel_file = exportar_excel(orcamentos_filtrados if orcamentos_filtrados else orcamentos)
