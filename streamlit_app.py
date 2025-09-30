@@ -439,7 +439,7 @@ st_por_estado = {
 # ============================
 # Interface - Limpar Tela
 # ============================
-if st.button("🧹 Limpar Tela"):
+if st.button("Novo Orçamento"):
     # Resetar todos os session_state
     st.session_state.update({
         "Cliente_nome": "", "Cliente_CNPJ": "", "tipo_cliente": " ", "estado": None,
@@ -792,12 +792,6 @@ if menu == "Histórico de Orçamentos":
             max_value=max_data.date(),
             key="filtro_datas"
         )
-
-        # Botão de limpar filtros
-if st.button("🧹 Limpar Filtros"):
-st.session_state.pop("filtro_cliente", None)
-st.session_state.pop("date", None)
-st.rerun()
         
         orcamentos_filtrados = []
         for o in orcamentos:
