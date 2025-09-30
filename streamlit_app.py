@@ -789,17 +789,31 @@ st.markdown("🔒 Os dados acima são apenas para inclusão no orçamento (PDF o
 
 
 # ============================
-# Página de Histórico
+# Página: Histórico
 # ============================
-if menu == "Histórico de Orçamentos":
+elif menu == "📋 Histórico de Orçamentos Salvos":
     st.title("📋 Histórico de Orçamentos Salvos")
-    orcamentos = buscar_orcamentos()
-    if not orcamentos:
-        st.info("Nenhum orçamento encontrado.")
-    else:
-        clientes = sorted(list({o[2] for o in orcamentos if o[2]}))
-        cliente_filtro = st.selectbox("Filtrar por cliente:", ["Todos"] + clientes, key="filtro_cliente")
 
+    orcamentos = carregar_orcamentos()
+    if orcamentos:
+        df = pd.DataFrame(orcamentos, columns=["ID","Data","Cliente","CNPJ/CPF","Tipo Cliente","Estado","Tipo Pedido","Frete","Vendedor","Valor Final","Produto","Observações","Preço m²","Tipo Produto"])
+        st.dataframe(df)
+
+        # Exportar Excel
+        excel_file = exportar_excel(orcamentos)
+        st.download_button("📥 Baixar Excel", excel_file, file_name="orcamentos.xlsx")
+
+        # Baixar PDF do orçamento selecionado
+        id_select = st.number_input("Digite o ID do orçamento para gerar PDF:", min_value=1, step=1)
+        if st.button("📄 Gerar PDF"):
+            orc = carregar_orcamento_por_id(id_select)
+            if orc:
+                pdf_file = gerar_pdf(orc)
+                st.download_button("⬇️ Baixar PDF", pdf_file, file_name=f"orcamento_{id_select}.pdf")
+            else:
+                st.error("ID não encontrado!")
+    else:
+        st.info("Nenhum orçamento salvo ainda.")
         datas = [datetime.strptime(o[1], "%d/%m/%Y %H:%M") for o in orcamentos]
         min_data, max_data = min(datas), max(datas)
         data_inicio, data_fim = st.date_input(
