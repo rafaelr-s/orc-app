@@ -405,6 +405,7 @@ for k, v in def_.items():
 # Configuração Streamlit
 # ============================
 st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", layout="centered")
+st.title("Orçamento - Grupo Locomotiva")
 
 # --- Menu ---
 menu = st.sidebar.selectbox(
@@ -451,9 +452,6 @@ if st.button("🧹 Limpar Tela"):
 # ============================
 # Página - Novo Orçamento
 # ============================
-def pagina_novo_orcamento():
-st.title("Orçamento - Grupo Locomotiva")
-
 if menu == "Novo Orçamento":
     brasilia_tz = pytz.timezone("America/Sao_Paulo")
     data_hora_brasilia = datetime.now(brasilia_tz).strftime("%d/%m/%Y %H:%M")
