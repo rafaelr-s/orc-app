@@ -783,10 +783,10 @@ if menu == "Histórico de Orçamentos":
 
                     col1, col2 = st.columns([1,1])
                     with col1:
-                        if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
-                            orc, confecc, bob = carregar_orcamento_por_id(orc_id)
-                            if not orc:
-                                st.error("Orçamento não encontrado.")
+                        if st.button("🔄 Reabrir", key=f"reabrir_{orc[0]}"):
+                            st.session_state.page = "novo"
+                            st.session_state.reabrir_id = orc[0]
+                            st.stop()
                             else:
                                 # Mapeamento BD -> session_state
                                 st.session_state["Cliente_nome"] = orc[2] or ""
