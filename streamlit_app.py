@@ -20,8 +20,8 @@ def exportar_excel(orcamentos):
     dados_export = []
 
     for o in orcamentos:
-        # Se o registro tiver menos de 14 campos, assume que é resumido e precisa carregar completo
-        if len(o) < 14:
+        # Se o registro tiver menos de 5 campos, assume que é resumido e precisa carregar completo
+        if len(o) < 5:
             orcamento_id = o[0]
             orc, confecc, bob = carregar_orcamento_por_id(orcamento_id)
         else:
