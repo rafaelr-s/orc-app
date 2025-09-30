@@ -7,60 +7,45 @@ import sqlite3
 import pandas as pd
 from io import BytesIO
 
+
 # ============================
 # Função para exportar Excel
 # ============================
 def exportar_excel(orcamentos):
+    """
+    Recebe uma lista de orçamentos, que podem ser:
+    - do tipo completo: retornado de carregar_orcamento_por_id
+    - do tipo resumido: [(id, data_hora, cliente_nome, vendedor_nome), ...]
+    """
     dados_export = []
+
     for o in orcamentos:
-        orc_id, data_hora, cliente_nome, vendedor_nome = o
-        orc, confecc, bob = carregar_orcamento_por_id(orc_id)
+        # Se o registro tiver menos de 14 campos, assume que é resumido e precisa carregar completo
+        if len(o) < 14:
+            orcamento_id = o[0]
+            orc, confecc, bob = carregar_orcamento_por_id(orcamento_id)
+        else:
+            orc = o
 
-        # Lista de produtos
-        produtos_lista = []
-        if confecc:
-            produtos_lista.extend([c[0] for c in confecc])
-        if bob:
-            produtos_lista.extend([b[0] for b in bob])
+        if not orc:
+            continue
 
-        # Confeccionados detalhados
-        itens_conf_txt = []
-        if confecc:
-            for c in confecc:
-                valor_item = c[1] * c[2] * c[3]  # área total (m²)
-                itens_conf_txt.append(
-                    f"{c[3]}x {c[0]} {c[1]:.2f}m x {c[2]:.2f}m | Cor: {c[4]}"
-                )
-
-        # Bobinas detalhadas
-        itens_bob_txt = []
-        if bob:
-            for b in bob:
-                esp = f" | Esp: {b[5]:.2f}mm" if b[5] is not None else ""
-                preco = f" | Preço unit.: {b[6]:.2f} R$" if b[6] is not None else ""
-                itens_bob_txt.append(
-                    f"{b[3]}x {b[0]} {b[1]:.2f}m | Largura: {b[2]:.2f}m{esp} | Cor: {b[4]}{preco}"
-                )
-
-def exportar_excel(orcamentos):
-    dados_export = []
-    for orc in orcamentos:
         dados_export.append({
             "ID": orc[0],
-            "Cliente": orc[1],
-            "CNPJ/CPF": orc[2],
-            "Data": orc[3],
+            "Cliente": orc[2],
+            "CNPJ/CPF": orc[3],
+            "Data": orc[1],
             "Tipo Cliente": orc[4],
             "Estado": orc[5],
-            "Tipo Pedido": orc[6],
-            "Frete": orc[7],
-            "Valor Bruto": orc[8],
-            "ICMS": orc[9],
-            "IPI": orc[10],
-            "ST": orc[11],
-            "Valor Final": orc[12],
-            "Observações": orc[13]
+            "Tipo Pedido": orc[7],
+            "Frete": orc[6],
+            "Vendedor Nome": orc[8],
+            "Vendedor Telefone": orc[9],
+            "Vendedor E-mail": orc[10],
+            "Observações": orc[11],
+            "Preço m²/metro linear": orc[12] if len(orc) > 12 else 0.0
         })
+
     df = pd.DataFrame(dados_export)
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
