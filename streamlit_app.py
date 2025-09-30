@@ -42,28 +42,31 @@ def exportar_excel(orcamentos):
                     f"{b[3]}x {b[0]} {b[1]:.2f}m | Largura: {b[2]:.2f}m{esp} | Cor: {b[4]}{preco}"
                 )
 
-        # Exporta uma linha por orçamento
+def exportar_excel(orcamentos):
+    dados_export = []
+    for orc in orcamentos:
         dados_export.append({
-            "ID Orçamento": orc_id,
-            "Data/Hora": data_hora,
-            "Cliente": cliente_nome,
-             "CNPJ/CPF": Cliente_CNPJ,
-            "Produto": ", ".join(produtos_lista),
-            "Tipo Cliente": orc[4] if orc else "",
-            "Estado": orc[5] if orc else "",
-            "Tipo Pedido": orc[7] if orc else "",
-            "Frete": orc[6] if orc else "",
-            "Observação": orc[11] if orc else "",
-            "Itens Confeccionados": "\n".join(itens_conf_txt),
-            "Itens Bobinas": "\n".join(itens_bob_txt)
+            "ID": orc[0],
+            "Cliente": orc[1],
+            "CNPJ/CPF": orc[2],
+            "Data": orc[3],
+            "Tipo Cliente": orc[4],
+            "Estado": orc[5],
+            "Tipo Pedido": orc[6],
+            "Frete": orc[7],
+            "Valor Bruto": orc[8],
+            "ICMS": orc[9],
+            "IPI": orc[10],
+            "ST": orc[11],
+            "Valor Final": orc[12],
+            "Observações": orc[13]
         })
-
     df = pd.DataFrame(dados_export)
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Orçamentos")
-    output.seek(0)
-    return output
+    processed_data = output.getvalue()
+    return processed_data
 
 # ============================
 # Funções de Banco de Dados
