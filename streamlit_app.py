@@ -7,52 +7,88 @@ import sqlite3
 import pandas as pd
 from io import BytesIO
 
+# ============================
+# Funções de Banco de Dados
+# ============================
+def init_db():
+    conn = sqlite3.connect("orcamentos.db")
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS orcamentos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            data TEXT,
+            cliente_nome TEXT,
+            cliente_cnpj TEXT,
+            tipo_cliente TEXT,
+            estado TEXT,
+            tipo_pedido TEXT,
+            frete TEXT,
+            vendedor_nome TEXT,
+            valor_final REAL,
+            nome_produto TEXT,
+            observacoes TEXT,
+            preco_m2 REAL,
+            tipo_produto TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def salvar_orcamento(dados):
+    conn = sqlite3.connect("orcamentos.db")
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO orcamentos 
+        (data, cliente_nome, cliente_cnpj, tipo_cliente, estado, tipo_pedido, frete, vendedor_nome, valor_final, nome_produto, observacoes, preco_m2, tipo_produto)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, dados)
+    conn.commit()
+    conn.close()
+
+def carregar_orcamentos():
+    conn = sqlite3.connect("orcamentos.db")
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM orcamentos ORDER BY id DESC")
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+def carregar_orcamento_por_id(orcamento_id):
+    conn = sqlite3.connect("orcamentos.db")
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM orcamentos WHERE id = ?", (orcamento_id,))
+    orc = cur.fetchone()
+    conn.close()
+    return orc
 
 # ============================
 # Função para exportar Excel
 # ============================
 def exportar_excel(orcamentos):
-    """
-    Recebe uma lista de orçamentos, que podem ser:
-    - do tipo completo: retornado de carregar_orcamento_por_id
-    - do tipo resumido: [(id, data_hora, cliente_nome, vendedor_nome), ...]
-    """
     dados_export = []
-
-    for o in orcamentos:
-        # Se o registro tiver menos de 5 campos, assume que é resumido e precisa carregar completo
-        if len(o) < 5:
-            orcamento_id = o[0]
-            orc, confecc, bob = carregar_orcamento_por_id(orcamento_id)
-        else:
-            orc = o
-
-        if not orc:
-            continue
-
+    for orc in orcamentos:
         dados_export.append({
-            "ID": orc[0] if len(orc) > 0 else "",
-            "Data": orc[1] if len(orc) > 1 else "",
-            "Cliente": orc[2] if len(orc) > 2 else "",
-            "CNPJ/CPF": orc[3] if len(orc) > 3 else "",
-            "Tipo Cliente": orc[4] if len(orc) > 4 else "",
-            "Estado": orc[5] if len(orc) > 5 else "",
-            "Tipo Pedido": orc[7] if len(orc) > 7 else "",
-            "Nome do Produto": orc[10] if len(orc) > 10 else "",
-            "Tipo do Produto": orc[13] if len(orc) > 13 else "",
-            "Preço m²/metro linear": orc[12] if len(orc) > 12 else 0.0,
-            "Valor final": orc[9] if len(orc) > 9 else 0.0,
-            "Frete": orc[6] if len(orc) > 6 else "",
-            "Vendedor Nome": orc[8] if len(orc) > 8 else "",
-            "Observações": orc[11] if len(orc) > 11 else "",
+            "ID": orc[0],
+            "Data": orc[1],
+            "Cliente": orc[2],
+            "CNPJ/CPF": orc[3],
+            "Tipo Cliente": orc[4],
+            "Estado": orc[5],
+            "Tipo Pedido": orc[6],
+            "Frete": orc[7],
+            "Vendedor Nome": orc[8],
+            "Valor Final": orc[9],
+            "Nome Produto": orc[10],
+            "Observações": orc[11],
+            "Preço m²/metro linear": orc[12],
+            "Tipo Produto": orc[13],
         })
 
     df = pd.DataFrame(dados_export)
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Orçamentos")
-    processed_data = output.getvalue()
-    return processed_data
+    return output.getvalue()
     
 # ============================
 # Funções de Banco de Dados
@@ -391,18 +427,12 @@ for k, v in def_.items():
         st.session_state[k] = v
 
 # ============================
-# Configuração Streamlit
+# Layout do Streamlit
 # ============================
-st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", layout="centered")
-st.title("Orçamento - Grupo Locomotiva")
+st.set_page_config(page_title="Orçamento Grupo Locomotiva", layout="wide")
+init_db()
 
-# --- Menu ---
-menu = st.sidebar.selectbox(
-    "Menu",
-    ["Novo Orçamento","Histórico de Orçamentos"],
-    index=0 if st.session_state.get("menu_selected","Novo Orçamento") == "Novo Orçamento" else 1,
-    key="menu"
-)
+menu = st.sidebar.selectbox("Menu", ["Novo Orçamento", "📋 Histórico de Orçamentos Salvos"])
 
 # ============================
 # Tabelas de ICMS e ST
