@@ -236,7 +236,7 @@ def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
 # ============================
 # Função para gerar PDF (retorna bytes)
 # ============================
-def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_conf, resumo_bob, observacao, preco_m2, tipo_cliente="", estado=""):
+def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_conf, resumo_bob, observacao, preco_m2, tipo_cliente="", estado=""):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -246,7 +246,7 @@ def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_con
     pdf.cell(0, 12, "Orçamento - Grupo Locomotiva", ln=True, align="C")
     pdf.ln(10)
     pdf.set_font("Arial", size=9)
-    pdf.cell(0, 10, f"Orçamento ID: {orcamento_id}", ln=True)
+    pdf.cell(0, 10, f"Orçamento ID: {orcamento_id}", ln=True)  # <<-- agora vem como argumento
     brasilia_tz = pytz.timezone("America/Sao_Paulo")
     pdf.cell(0, 6, f"Data e Hora: {datetime.now(brasilia_tz).strftime('%d/%m/%Y %H:%M')}", ln=True)
     pdf.cell(0, 6, "Validade da Cotação: 7 dias corridos.", ln=True, align="L")
