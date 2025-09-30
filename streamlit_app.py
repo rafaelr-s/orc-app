@@ -47,6 +47,7 @@ def exportar_excel(orcamentos):
             "ID Orçamento": orc_id,
             "Data/Hora": data_hora,
             "Cliente": cliente_nome,
+             "CNPJ/CPF": Cliente_CNPJ,
             "Produto": ", ".join(produtos_lista),
             "Tipo Cliente": orc[4] if orc else "",
             "Estado": orc[5] if orc else "",
@@ -404,6 +405,7 @@ for k, v in def_.items():
 # Configuração Streamlit
 # ============================
 st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", layout="centered")
+def pagina_novo_orcamento():
 st.title("Orçamento - Grupo Locomotiva")
 
 # --- Menu ---
@@ -774,7 +776,7 @@ st.markdown("🔒 Os dados acima são apenas para inclusão no orçamento (PDF o
 # Página de Histórico
 # ============================
 if menu == "Histórico de Orçamentos":
-    st.subheader("📋 Histórico de Orçamentos Salvos")
+    st.title("📋 Histórico de Orçamentos Salvos")
     orcamentos = buscar_orcamentos()
     if not orcamentos:
         st.info("Nenhum orçamento encontrado.")
@@ -792,6 +794,12 @@ if menu == "Histórico de Orçamentos":
             key="filtro_datas"
         )
 
+        # Botão de limpar filtros
+if st.button("🧹 Limpar Filtros"):
+st.session_state.pop("filtro_cliente", None)
+st.session_state.pop("date", None)
+st.rerun()
+        
         orcamentos_filtrados = []
         for o in orcamentos:
             orc_id, data_hora, cliente_nome, vendedor_nome = o
@@ -804,13 +812,17 @@ if menu == "Histórico de Orçamentos":
         if not orcamentos_filtrados:
             st.warning("Nenhum orçamento encontrado com os filtros selecionados.")
         else:
-            for o in orcamentos_filtrados:
-                orc_id, data_hora, cliente_nome, vendedor_nome = o
+            for orc in orcamentos:
+                orc_id = orc[0]
+                data_hora = orc[1]
+                cliente = orc[2]
+                cnpj = orc[3]
+                valor_final = orc[13] if len(orc) > 13 else None
                 pdf_path = f"orcamento_{orc_id}.pdf"
 
                 with st.expander(f"📝 ID {orc_id} - {cliente_nome} ({data_hora})"):
                     st.markdown(f"**👤 Cliente:** {cliente_nome}")
-                    st.markdown(f"**🗣️ Vendedor:** {vendedor_nome}")
+                    st.markdown(f"💰 **Valor Final:** R$ {valor_final:,.2f}" if valor_final else "💰 **Valor Final:** -")
 
                     orc, confecc, bob = carregar_orcamento_por_id(orc_id)
 
