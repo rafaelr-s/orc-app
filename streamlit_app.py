@@ -32,18 +32,19 @@ def exportar_excel(orcamentos):
 
         dados_export.append({
             "ID": orc[0],
+            "Data": orc[1],
             "Cliente": orc[2],
             "CNPJ/CPF": orc[3],
-            "Data": orc[1],
             "Tipo Cliente": orc[4],
             "Estado": orc[5],
             "Tipo Pedido": orc[7],
+            "Nome do Produto": orc[10]
+            "Tipo do Produto": orc[13]
+            "Preço m²/metro linear": orc[12] if len(orc) > 12 else 0.0
+            "Valor final": orc[9],
             "Frete": orc[6],
             "Vendedor Nome": orc[8],
-            "Vendedor Telefone": orc[9],
-            "Vendedor E-mail": orc[10],
             "Observações": orc[11],
-            "Preço m²/metro linear": orc[12] if len(orc) > 12 else 0.0
         })
 
     df = pd.DataFrame(dados_export)
