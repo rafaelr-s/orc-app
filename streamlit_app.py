@@ -458,8 +458,6 @@ if menu == "Novo Orçamento":
             st.session_state["frete_sel"] = orc[6] or "CIF"
             st.session_state["tipo_pedido"] = orc[7] or "Direta"
             st.session_state["vend_nome"] = orc[8] or ""
-            st.session_state["vend_tel"] = orc[9] or ""
-            st.session_state["vend_email"] = orc[10] or ""
             st.session_state["obs"] = orc[11] or ""
             st.session_state["preco_m2"] = float(orc[12]) if len(orc) > 12 and orc[12] is not None else 0.0
 
@@ -799,7 +797,7 @@ if menu == "Histórico de Orçamentos":
                 data_hora = orc[1]
                 cliente = orc[2]
                 cnpj = orc[3]
-                valor_final = orc[13] if len(orc) > 13 else None
+                valor_final = orc[9] if len(orc) > 13 else None
                 pdf_path = f"orcamento_{orc_id}.pdf"
 
                 with st.expander(f"📝 ID {orc_id} - {cliente_nome} ({data_hora})"):
