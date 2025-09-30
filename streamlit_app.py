@@ -414,11 +414,16 @@ menu = st.sidebar.selectbox(
     key="menu"
 )
 
-# ICMS e ST
+# ============================
+# Tabelas de ICMS e ST
+# ============================
 icms_por_estado = {
     "SP": 18, "MG": 12, "PR": 12, "RJ": 12, "RS": 12, "SC": 12
 }
- todos_estados = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MT","MS","PA","PB","PE","PI","RN","RO","RR","SE","TO"]
+todos_estados = [
+    "AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MT","MS",
+    "PA","PB","PE","PI","RN","RO","RR","SE","TO"
+]
 for uf in todos_estados:
     if uf not in icms_por_estado:
         icms_por_estado[uf] = 7
