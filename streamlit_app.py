@@ -31,7 +31,7 @@ def exportar_excel(orcamentos):
                 itens_conf_txt.append(
                     f"{c[3]}x {c[0]} {c[1]:.2f}m x {c[2]:.2f}m | Cor: {c[4]}"
                 )
-        
+
         # Bobinas detalhadas
         itens_bob_txt = []
         if bob:
@@ -70,6 +70,7 @@ def exportar_excel(orcamentos):
 def init_db():
     conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
+    # Cria tabela com coluna preco_m2 (para suportar histórico com preço salvo)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS orcamentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,9 +84,11 @@ def init_db():
             vendedor_nome TEXT,
             vendedor_tel TEXT,
             vendedor_email TEXT,
-            observacao TEXT
+            observacao TEXT,
+            preco_m2 REAL DEFAULT 0.0
         )
     """)
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS itens_confeccionados (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,27 +115,39 @@ def init_db():
             FOREIGN KEY (orcamento_id) REFERENCES orcamentos(id)
         )
     """)
+
+    # Migração simples: se DB antigo não tiver a coluna preco_m2, adiciona
+    cur.execute("PRAGMA table_info(orcamentos)")
+    cols = [row[1] for row in cur.fetchall()]
+    if 'preco_m2' not in cols:
+        try:
+            cur.execute("ALTER TABLE orcamentos ADD COLUMN preco_m2 REAL DEFAULT 0.0")
+        except Exception:
+            pass
+
     conn.commit()
     conn.close()
 
-def salvar_orcamento(cliente, vendedor, itens_confeccionados, itens_bobinas, observacao):
+
+def salvar_orcamento(cliente, vendedor, itens_confeccionados, itens_bobinas, observacao, preco_m2=0.0):
     conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO orcamentos (data_hora, cliente_nome, cliente_cnpj, tipo_cliente, estado, frete, tipo_pedido, vendedor_nome, vendedor_tel, vendedor_email, observacao)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO orcamentos (data_hora, cliente_nome, cliente_cnpj, tipo_cliente, estado, frete, tipo_pedido, vendedor_nome, vendedor_tel, vendedor_email, observacao, preco_m2)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         datetime.now(pytz.timezone("America/Sao_Paulo")).strftime("%d/%m/%Y %H:%M"),
-        cliente.get("nome",""),
-        cliente.get("cnpj",""),
-        cliente.get("tipo_cliente",""),
-        cliente.get("estado",""),
-        cliente.get("frete",""),
-        cliente.get("tipo_pedido",""),
-        vendedor.get("nome",""),
-        vendedor.get("tel",""),
-        vendedor.get("email",""),
-        observacao
+        cliente.get("nome","") if isinstance(cliente, dict) else "",
+        cliente.get("cnpj","") if isinstance(cliente, dict) else "",
+        cliente.get("tipo_cliente","") if isinstance(cliente, dict) else "",
+        cliente.get("estado","") if isinstance(cliente, dict) else "",
+        cliente.get("frete","") if isinstance(cliente, dict) else "",
+        cliente.get("tipo_pedido","") if isinstance(cliente, dict) else "",
+        vendedor.get("nome","") if isinstance(vendedor, dict) else "",
+        vendedor.get("tel","") if isinstance(vendedor, dict) else "",
+        vendedor.get("email","") if isinstance(vendedor, dict) else "",
+        observacao,
+        float(preco_m2) if preco_m2 is not None else 0.0
     ))
     orcamento_id = cur.lastrowid
 
@@ -152,6 +167,7 @@ def salvar_orcamento(cliente, vendedor, itens_confeccionados, itens_bobinas, obs
     conn.close()
     return orcamento_id
 
+
 def buscar_orcamentos():
     conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
@@ -159,6 +175,7 @@ def buscar_orcamentos():
     rows = cur.fetchall()
     conn.close()
     return rows
+
 
 def carregar_orcamento_por_id(orcamento_id):
     conn = sqlite3.connect("orcamentos.db")
@@ -209,6 +226,7 @@ def calcular_valores_confeccionados(itens, preco_m2, tipo_cliente="", estado="",
 
     return m2_total, valor_bruto, valor_ipi, valor_final, valor_st, aliquota_st
 
+
 def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
     if not itens:
         return 0.0, 0.0, 0.0, 0.0
@@ -246,7 +264,7 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
     pdf.cell(0, 12, "Orçamento - Grupo Locomotiva", ln=True, align="C")
     pdf.ln(10)
     pdf.set_font("Arial", size=9)
-    pdf.cell(0, 10, f"Orçamento ID: {orcamento_id}", ln=True)  # <<-- agora vem como argumento
+    pdf.cell(0, 10, f"Orçamento ID: {orcamento_id}", ln=True)
     brasilia_tz = pytz.timezone("America/Sao_Paulo")
     pdf.cell(0, 6, f"Data e Hora: {datetime.now(brasilia_tz).strftime('%d/%m/%Y %H:%M')}", ln=True)
     pdf.cell(0, 6, "Validade da Cotação: 7 dias corridos.", ln=True, align="L")
@@ -362,7 +380,7 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
 init_db()
 
 # session state defaults for form fields (so reabrir can populate)
-defaults = {
+def_ = {
     "Cliente_nome": "",
     "Cliente_CNPJ": "",
     "tipo_cliente": " ",
@@ -375,9 +393,10 @@ defaults = {
     "obs": "",
     "vend_nome": "",
     "vend_tel": "",
-    "vend_email": ""
+    "vend_email": "",
+    "menu_selected": "Novo Orçamento"
 }
-for k, v in defaults.items():
+for k, v in def_.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -388,13 +407,18 @@ st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", 
 st.title("Orçamento - Grupo Locomotiva")
 
 # --- Menu ---
-menu = st.sidebar.selectbox("Menu", ["Novo Orçamento","Histórico de Orçamentos"], index=0)
+menu = st.sidebar.selectbox(
+    "Menu",
+    ["Novo Orçamento","Histórico de Orçamentos"],
+    index=0 if st.session_state.get("menu_selected","Novo Orçamento") == "Novo Orçamento" else 1,
+    key="menu"
+)
 
 # ICMS e ST
 icms_por_estado = {
     "SP": 18, "MG": 12, "PR": 12, "RJ": 12, "RS": 12, "SC": 12
 }
-todos_estados = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MT","MS","PA","PB","PE","PI","RN","RO","RR","SE","TO"]
+ todos_estados = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MT","MS","PA","PB","PE","PI","RN","RO","RR","SE","TO"]
 for uf in todos_estados:
     if uf not in icms_por_estado:
         icms_por_estado[uf] = 7
@@ -407,17 +431,21 @@ st_por_estado = {
 }
 
 # ============================
-# Interface - Novo Orçamento
+# Interface - Limpar Tela
 # ============================
 if st.button("🧹 Limpar Tela"):
     # Resetar todos os session_state
     st.session_state.update({
         "Cliente_nome": "", "Cliente_CNPJ": "", "tipo_cliente": " ", "estado": None,
         "tipo_pedido": "Direta", "preco_m2": 0.0, "itens_confeccionados": [], "bobinas_adicionadas": [],
-        "frete_sel": "CIF", "obs": "", "vend_nome": "", "vend_tel": "", "vend_email": ""
+        "frete_sel": "CIF", "obs": "", "vend_nome": "", "vend_tel": "", "vend_email": "",
+        "menu_selected": "Novo Orçamento"
     })
     st.rerun()
 
+# ============================
+# Página - Novo Orçamento
+# ============================
 if menu == "Novo Orçamento":
     brasilia_tz = pytz.timezone("America/Sao_Paulo")
     data_hora_brasilia = datetime.now(brasilia_tz).strftime("%d/%m/%Y %H:%M")
@@ -646,13 +674,14 @@ if menu == "Novo Orçamento":
             "email": st.session_state.get("vend_email","")
         }
 
-        # Salvar
+        # Salvar (agora passando preco_m2)
         orcamento_id = salvar_orcamento(
             cliente,
             vendedor,
             st.session_state["itens_confeccionados"],
             st.session_state["bobinas_adicionadas"],
-            st.session_state.get("obs","")
+            st.session_state.get("obs",""),
+            preco_m2=st.session_state.get("preco_m2", 0.0)
         )
         st.success(f"✅ Orçamento salvo com ID {orcamento_id}")
 
@@ -660,7 +689,7 @@ if menu == "Novo Orçamento":
         resumo_conf = calcular_valores_confeccionados(st.session_state["itens_confeccionados"], st.session_state.get("preco_m2",0.0), st.session_state.get("tipo_cliente"," "), st.session_state.get("estado",""), st.session_state.get("tipo_pedido","Direta")) if st.session_state["itens_confeccionados"] else None
         resumo_bob = calcular_valores_bobinas(st.session_state["bobinas_adicionadas"], st.session_state.get("preco_m2",0.0), st.session_state.get("tipo_pedido","Direta")) if st.session_state["bobinas_adicionadas"] else None
 
-        # Gerar PDF bytes
+        # Gerar PDF bytes (agora passando orcamento_id como primeiro arg)
         pdf_bytes = gerar_pdf(
             orcamento_id,
             cliente,
@@ -729,11 +758,12 @@ if menu == "Histórico de Orçamentos":
             for o in orcamentos_filtrados:
                 orc_id, data_hora, cliente_nome, vendedor_nome = o
                 pdf_path = f"orcamento_{orc_id}.pdf"
-                orc, confecc, bob = carregar_orcamento_por_id(orc_id)
 
                 with st.expander(f"📝 ID {orc_id} - {cliente_nome} ({data_hora})"):
                     st.markdown(f"**👤 Cliente:** {cliente_nome}")
                     st.markdown(f"**🗣️ Vendedor:** {vendedor_nome}")
+
+                    orc, confecc, bob = carregar_orcamento_por_id(orc_id)
 
                     if confecc:
                         st.markdown("### ⬛ Itens Confeccionados")
@@ -764,53 +794,53 @@ if menu == "Histórico de Orçamentos":
                                 st.session_state["vend_tel"] = orc[9] or ""
                                 st.session_state["vend_email"] = orc[10] or ""
                                 st.session_state["obs"] = orc[11] or ""
-                                st.session_state["preco_m2"] = orc[12] or 0.0  # <<< preço salvo
+                                st.session_state["preco_m2"] = float(orc[12]) if len(orc) > 12 and orc[12] is not None else 0.0
 
-        # Itens confeccionados
-        st.session_state["itens_confeccionados"] = [
-            {
-                "produto": c[0],
-                "comprimento": float(c[1]),
-                "largura": float(c[2]),
-                "quantidade": int(c[3]),
-                "cor": c[4] or "",
-            }
-            for c in confecc
-        ] if confecc else []
+                                # Itens confeccionados
+                                st.session_state["itens_confeccionados"] = [
+                                    {
+                                        "produto": c[0],
+                                        "comprimento": float(c[1]),
+                                        "largura": float(c[2]),
+                                        "quantidade": int(c[3]),
+                                        "cor": c[4] or "",
+                                    }
+                                    for c in confecc
+                                ] if confecc else []
 
-        # Itens bobinas
-        st.session_state["bobinas_adicionadas"] = [
-            {
-                "produto": b[0],
-                "comprimento": float(b[1]),
-                "largura": float(b[2]),
-                "quantidade": int(b[3]),
-                "cor": b[4] or "",
-                "espessura": float(b[5]) if b[5] is not None else None,
-                "preco_unitario": float(b[6]) if b[6] is not None else None,
-            }
-            for b in bob
-        ] if bob else []
+                                # Itens bobinas
+                                st.session_state["bobinas_adicionadas"] = [
+                                    {
+                                        "produto": b[0],
+                                        "comprimento": float(b[1]),
+                                        "largura": float(b[2]),
+                                        "quantidade": int(b[3]),
+                                        "cor": b[4] or "",
+                                        "espessura": float(b[5]) if b[5] is not None else None,
+                                        "preco_unitario": float(b[6]) if b[6] is not None else None,
+                                    }
+                                    for b in bob
+                                ] if bob else []
 
-        # Força a navegação para "Novo Orçamento"
-        st.session_state["menu_selected"] = "Novo Orçamento"
-        st.rerun()
-        
-        with col2:
-            if os.path.exists(pdf_path):
-                with open(pdf_path, "rb") as f:
-                    st.download_button(
-                        "⬇️ Baixar PDF",
-                        f,
-                        file_name=pdf_path,
-                        mime="application/pdf",
-                        key=f"download_{orc_id}"
-                    )
-            else:
-                st.warning("PDF ainda não gerado.")
+                                # Força a navegação para "Novo Orçamento"
+                                st.session_state["menu_selected"] = "Novo Orçamento"
+                                st.rerun()
+                                
+                    with col2:
+                        if os.path.exists(pdf_path):
+                            with open(pdf_path, "rb") as f:
+                                st.download_button(
+                                    "⬇️ Baixar PDF",
+                                    f.read(),
+                                    file_name=pdf_path,
+                                    mime="application/pdf",
+                                    key=f"download_{orc_id}"
+                                )
+                        else:
+                            st.warning("PDF ainda não gerado.")
 
-            # Botão exportar Excel (fora do loop)
-            excel_file = exportar_excel(orcamentos)
+            # Botão exportar Excel (fora do loop, exporta os filtrados)
+            excel_file = exportar_excel(orcamentos_filtrados if orcamentos_filtrados else orcamentos)
             st.download_button(
                 "📊 Exportar Relatório Excel",
                 data=excel_file,
