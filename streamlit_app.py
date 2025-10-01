@@ -1004,7 +1004,7 @@ if menu == "Histórico de Orçamentos":
                             mime="application/pdf",
                             key=f"download_historico_{orc_id}"
                         )
-                        with col3:
+                    with col3:
                         if st.button("❌ Excluir", key=f"excluir_{orc_id}"):
                             conn = sqlite3.connect(DB_NAME) 
                             cur = conn.cursor()
