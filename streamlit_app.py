@@ -364,9 +364,15 @@ def reset_novo_orcamento_state():
     st.session_state["tipo_pedido"] = "Direta"
     st.session_state["frete_sel"] = "CIF"
     st.session_state["obs"] = ""
+    
+    # Vendedor resetado para vazio/padrão
     st.session_state["vend_nome"] = ""
     st.session_state["vend_tel"] = ""
     st.session_state["vend_email"] = ""
+    # Resetar o selectbox
+    if "vendedor_select" in st.session_state:
+        st.session_state["vendedor_select"] = VENDEDORES_NOMES[0]
+
     st.session_state["preco_m2"] = 0.0
     st.session_state["menu_index"] = 0 
     
@@ -393,6 +399,23 @@ def reset_historico_filters():
     st.session_state["filtro_id"] = ""
     # O Streamlit faz o rerun automaticamente após a função on_click.
 
+# ============================
+# Constantes de Vendedores (NOVO)
+# ============================
+VENDEDORES = {
+    "Selecione um Vendedor": {"nome": "", "tel": "", "email": ""},
+    "Rafael Rodrigues": {"nome": "Rafael Rodrigues", "tel": "11 99150-0804", "email": "rrodrigues@locomotiva.com.br"},
+    "Tiago Victor": {"nome": "Tiago Victor", "tel": "11 97697-8167", "email": "tvitor@locomotiva.com.br"}
+}
+VENDEDORES_NOMES = list(VENDEDORES.keys())
+
+# Função para atualizar o Session State baseado na seleção (NOVO)
+def update_vendedor_details():
+    selected_name = st.session_state["vendedor_select"]
+    details = VENDEDORES.get(selected_name, {"nome": selected_name, "tel": "", "email": ""})
+    st.session_state["vend_nome"] = details["nome"]
+    st.session_state["vend_tel"] = details["tel"]
+    st.session_state["vend_email"] = details["email"]
 
 # ============================
 # Inicialização
@@ -661,13 +684,42 @@ if menu == "Novo Orçamento":
     st.subheader("🔎 Observações")
     Observacao = st.text_area("Insira aqui alguma observação sobre o orçamento (opcional)", value=st.session_state.get("obs",""), key="obs")
 
+    # -----------------------------------------------------
+    # NOVO: Seleção do Vendedor por Dropdown
+    # -----------------------------------------------------
     st.subheader("🗣️ Vendedor(a)")
-    col1, col2 = st.columns(2)
-    with col1:
-        vendedor_nome = st.text_input("Nome", value=st.session_state.get("vend_nome",""), key="vend_nome")
-        vendedor_tel = st.text_input("Telefone", value=st.session_state.get("vend_tel",""), key="vend_tel")
-    with col2:
-        vendedor_email = st.text_input("E-mail", value=st.session_state.get("vend_email",""), key="vend_email")
+    
+    # Tenta encontrar o nome do vendedor atual no session state na lista de vendedores, senão usa o primeiro
+    current_name = st.session_state.get("vend_nome", "")
+    try:
+        current_index = VENDEDORES_NOMES.index(current_name)
+    except ValueError:
+        current_index = 0 
+
+    vendedor_selecionado = st.selectbox(
+        "Selecione o Vendedor:", 
+        options=VENDEDORES_NOMES,
+        index=current_index,
+        key="vendedor_select", # Nova chave para o selectbox
+        on_change=update_vendedor_details # Função para atualizar o Session State
+    )
+
+    # Garante que, ao carregar a página, as variáveis de telefone e email estejam corretas
+    if st.session_state["vendedor_select"] != st.session_state.get("vend_nome", ""):
+        # Chama a função para garantir que vend_tel e vend_email sejam preenchidos ao carregar o estado
+        # O on_change não é disparado no primeiro load, então chamamos manualmente se necessário.
+        update_vendedor_details() 
+
+    # Exibe os dados do vendedor em modo somente leitura
+    st.markdown("---")
+    st.markdown(f"**Nome:** {st.session_state.get('vend_nome')}")
+    st.markdown(f"**Telefone:** {st.session_state.get('vend_tel')}")
+    st.markdown(f"**E-mail:** {st.session_state.get('vend_email')}")
+    st.markdown("---")
+    # -----------------------------------------------------
+    # FIM NOVO
+    # -----------------------------------------------------
+
 
     # Botão gerar e salvar
     if st.button("📄 Gerar PDF e Salvar Orçamento", key="gerar_e_salvar"):
@@ -679,6 +731,7 @@ if menu == "Novo Orçamento":
             "frete": st.session_state.get("frete_sel","CIF"),
             "tipo_pedido": st.session_state.get("tipo_pedido","Direta")
         }
+        # Vendedor é pego das variáveis de sessão, que foram atualizadas pelo selectbox
         vendedor = {
             "nome": st.session_state.get("vend_nome",""),
             "tel": st.session_state.get("vend_tel",""),
@@ -862,7 +915,7 @@ if menu == "Histórico de Orçamentos":
                     st.markdown(f"**Cliente:** {cliente_nome}")
                     st.markdown(f"**CNPJ:** {cliente_cnpj}")
                     st.markdown(f"**Vendedor:** {vendedor_nome}")
-                    st.markdown(f"**Preço Unit. Utilizado (💵):** {_format_brl(preco_m2_base)}") # Usa a variável agora definida
+                    st.markdown(f"**Preço Base Utilizado (R$):** {_format_brl(preco_m2_base)}") 
 
                     if confecc:
                         st.markdown("### ⬛ Itens Confeccionados")
@@ -886,6 +939,14 @@ if menu == "Histórico de Orçamentos":
                             elif bob:
                                 primeiro_produto = bob[0][0]
                                 
+                            # NOVO: Define o nome do vendedor para pre-selecionar no selectbox
+                            vendedor_nome_orc = orc[8] or ""
+                            if vendedor_nome_orc not in VENDEDORES_NOMES:
+                                # Se o nome não estiver na lista (e.g., nome digitado manualmente antes), use o nome do orçamento
+                                st.session_state["vendedor_select"] = vendedor_nome_orc 
+                            else:
+                                st.session_state["vendedor_select"] = vendedor_nome_orc 
+
                             st.session_state.update({
                                 "Cliente_nome": orc[2] or "",
                                 "Cliente_CNPJ": orc[3] or "",
@@ -943,14 +1004,3 @@ if menu == "Histórico de Orçamentos":
                             mime="application/pdf",
                             key=f"download_historico_{orc_id}"
                         )
-                    with col3:
-                        if st.button("❌ Excluir", key=f"excluir_{orc_id}"):
-                            conn = sqlite3.connect(DB_NAME) 
-                            cur = conn.cursor()
-                            cur.execute("DELETE FROM orcamentos WHERE id=?", (orc_id,))
-                            cur.execute("DELETE FROM itens_confeccionados WHERE orcamento_id=?", (orc_id,))
-                            cur.execute("DELETE FROM itens_bobinas WHERE orcamento_id=?", (orc_id,))
-                            conn.commit()
-                            conn.close()
-                            st.success(f"Orçamento ID {orc_id} excluído!")
-                            st.rerun()
