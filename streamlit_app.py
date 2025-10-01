@@ -1047,14 +1047,14 @@ if menu == "Histórico de Orçamentos":
                             key=f"download_historico_{orc_id}"
                         )
                         with col3:
-                        if st.button("❌ Excluir", key=f"excluir_{orc_id}"):
-                            conn = sqlite3.connect(DB_NAME) 
-                            cur = conn.cursor()
-                            cur.execute("DELETE FROM orcamentos WHERE id=?", (orc_id,))
-                            cur.execute("DELETE FROM itens_confeccionados WHERE orcamento_id=?", (orc_id,))
-                            cur.execute("DELETE FROM itens_bobinas WHERE orcamento_id=?", (orc_id,))
-                            conn.commit()
-                            conn.close()
-                            st.success(f"Orçamento ID {orc_id} excluído!")
-                            st.rerun()
+                            if st.button("❌ Excluir", key=f"excluir_{orc_id}"):
+                                conn = sqlite3.connect(DB_NAME) 
+                                cur = conn.cursor()
+                                cur.execute("DELETE FROM orcamentos WHERE id=?", (orc_id,))
+                                cur.execute("DELETE FROM itens_confeccionados WHERE orcamento_id=?", (orc_id,))
+                                cur.execute("DELETE FROM itens_bobinas WHERE orcamento_id=?", (orc_id,))
+                                conn.commit()
+                                conn.close()
+                                st.success(f"Orçamento ID {orc_id} excluído!")
+                                st.rerun()
                             
