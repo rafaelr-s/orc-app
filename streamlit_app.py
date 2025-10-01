@@ -8,113 +8,126 @@ import pandas as pd
 from io import BytesIO
 
 # ============================
-# Banco SQLite
+# Banco de Dados
 # ============================
 def init_db():
     conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
+
+    # Tabela principal de orçamentos
     cur.execute("""
         CREATE TABLE IF NOT EXISTS orcamentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            data_hora TEXT,
             cliente_nome TEXT,
             cliente_cnpj TEXT,
-            tipo_cliente TEXT,
-            estado TEXT,
-            frete TEXT,
-            tipo_pedido TEXT,
             vendedor_nome TEXT,
-            vendedor_tel TEXT,
-            vendedor_email TEXT,
-            observacao TEXT
+            observacao TEXT,
+            valor_final REAL,
+            data TEXT
         )
     """)
+
+    # Itens confeccionados
     cur.execute("""
         CREATE TABLE IF NOT EXISTS itens_confeccionados (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             orcamento_id INTEGER,
             produto TEXT,
-            comprimento REAL,
-            largura REAL,
-            quantidade INTEGER,
-            cor TEXT,
-            FOREIGN KEY (orcamento_id) REFERENCES orcamentos(id)
+            quantidade REAL,
+            preco_unitario REAL,
+            total REAL,
+            FOREIGN KEY (orcamento_id) REFERENCES orcamentos (id)
         )
     """)
+
+    # Itens bobinas
     cur.execute("""
         CREATE TABLE IF NOT EXISTS itens_bobinas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             orcamento_id INTEGER,
             produto TEXT,
-            comprimento REAL,
-            largura REAL,
-            quantidade INTEGER,
-            cor TEXT,
-            espessura REAL,
-            preco_unitario REAL,
-            FOREIGN KEY (orcamento_id) REFERENCES orcamentos(id)
+            metragem REAL,
+            preco_metro REAL,
+            total REAL,
+            FOREIGN KEY (orcamento_id) REFERENCES orcamentos (id)
         )
     """)
+
     conn.commit()
     conn.close()
 
-def salvar_orcamento(cliente, vendedor, itens_confeccionados, itens_bobinas, observacao):
+# ============================
+# Funções do Banco
+# ============================
+def salvar_orcamento(cliente_nome, cliente_cnpj, vendedor_nome, observacao, valor_final, itens_conf, itens_bobinas):
     conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
 
+    data = datetime.now(pytz.timezone("America/Sao_Paulo")).strftime("%d/%m/%Y %H:%M")
+
+    # Salva orçamento principal
     cur.execute("""
-        INSERT INTO orcamentos (data_hora, cliente_nome, cliente_cnpj, tipo_cliente, estado, frete, tipo_pedido, vendedor_nome, vendedor_tel, vendedor_email, observacao)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        datetime.now(pytz.timezone("America/Sao_Paulo")).strftime("%d/%m/%Y %H:%M"),
-        cliente.get("nome",""),
-        cliente.get("cnpj",""),
-        cliente.get("tipo_cliente",""),
-        cliente.get("estado",""),
-        cliente.get("frete",""),
-        cliente.get("tipo_pedido",""),
-        vendedor.get("nome",""),
-        vendedor.get("tel",""),
-        vendedor.get("email",""),
-        observacao
-    ))
+        INSERT INTO orcamentos (cliente_nome, cliente_cnpj, vendedor_nome, observacao, valor_final, data)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (cliente_nome, cliente_cnpj, vendedor_nome, observacao, valor_final, data))
     orcamento_id = cur.lastrowid
 
-    for item in itens_confeccionados:
+    # Itens confeccionados
+    for item in itens_conf:
         cur.execute("""
-            INSERT INTO itens_confeccionados (orcamento_id, produto, comprimento, largura, quantidade, cor)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (orcamento_id, item['produto'], item['comprimento'], item['largura'], item['quantidade'], item.get('cor','')))
+            INSERT INTO itens_confeccionados (orcamento_id, produto, quantidade, preco_unitario, total)
+            VALUES (?, ?, ?, ?, ?)
+        """, (orcamento_id, item["produto"], item["quantidade"], item["preco_unitario"], item["total"]))
 
+    # Itens bobinas
     for item in itens_bobinas:
         cur.execute("""
-            INSERT INTO itens_bobinas (orcamento_id, produto, comprimento, largura, quantidade, cor, espessura, preco_unitario)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (orcamento_id, item['produto'], item['comprimento'], item['largura'], item['quantidade'], item.get('cor',''), item.get('espessura'), item.get('preco_unitario')))
+            INSERT INTO itens_bobinas (orcamento_id, produto, metragem, preco_metro, total)
+            VALUES (?, ?, ?, ?, ?)
+        """, (orcamento_id, item["produto"], item["metragem"], item["preco_metro"], item["total"]))
 
     conn.commit()
     conn.close()
     return orcamento_id
 
-def buscar_orcamentos():
+def carregar_orcamentos():
     conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
-    cur.execute("SELECT id, data_hora, cliente_nome, vendedor_nome FROM orcamentos ORDER BY id DESC")
+    cur.execute("SELECT * FROM orcamentos ORDER BY id DESC")
     rows = cur.fetchall()
     conn.close()
     return rows
 
-def carregar_orcamento_por_id(orcamento_id):
-    conn = sqlite3.connect("orcamentos.db")
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM orcamentos WHERE id=?", (orcamento_id,))
-    orc = cur.fetchone()
-    cur.execute("SELECT produto, comprimento, largura, quantidade, cor FROM itens_confeccionados WHERE orcamento_id=?", (orcamento_id,))
-    confecc = cur.fetchall()
-    cur.execute("SELECT produto, comprimento, largura, quantidade, cor, espessura, preco_unitario FROM itens_bobinas WHERE orcamento_id=?", (orcamento_id,))
-    bob = cur.fetchall()
-    conn.close()
-    return orc, confecc, bob
+# ============================
+# Exportar Excel
+# ============================
+def exportar_excel(orcamentos):
+    dados_export = []
+    for orc in orcamentos:
+        orc_id = orc[0]
+        cliente_nome = orc[1]
+        cliente_cnpj = orc[2]
+        vendedor_nome = orc[3]
+        observacao = orc[4]
+        valor_final = orc[5]
+        data = orc[6]
+
+        dados_export.append({
+            "ID Orçamento": orc_id,
+            "Cliente": cliente_nome,
+            "CNPJ/CPF": cliente_cnpj,
+            "Vendedor": vendedor_nome,
+            "Observação": observacao,
+            "Valor Final (R$)": valor_final,
+            "Data": data
+        })
+
+    df = pd.DataFrame(dados_export)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Orçamentos")
+    processed_data = output.getvalue()
+    return processed_data
 
 # ============================
 # Formatação R$
