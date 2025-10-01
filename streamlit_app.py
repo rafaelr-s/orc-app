@@ -142,9 +142,9 @@ def _format_brl(v):
         return f"R$ {v}"
 
 # ============================
-# Cálculos (manter funções de cálculo como estão)
+# Cálculos
 # ============================
-st_por_estado = {} # Declarado aqui, populado abaixo
+st_por_estado = {} 
 
 def calcular_valores_confeccionados(itens, preco_m2, tipo_cliente="", estado="", tipo_pedido="Direta"):
     if not itens:
@@ -207,7 +207,7 @@ def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
     return m_total, valor_bruto, valor_ipi, valor_final
 
 # ============================
-# Função para gerar PDF (ATUALIZADA com ID)
+# Função para gerar PDF
 # ============================
 def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_conf, resumo_bob, observacao, preco_m2, tipo_cliente="", estado=""):
     pdf = FPDF()
@@ -218,7 +218,7 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
     # Cabeçalho principal
     pdf.cell(0, 12, "Orçamento - Grupo Locomotiva", ln=True, align="C")
     
-    # NOVO: Inclusão do ID do Orçamento
+    # Inclusão do ID do Orçamento
     if orcamento_id:
         pdf.set_font("Arial", "B", 11)
         pdf.cell(0, 6, f"ID do Orçamento: {orcamento_id}", ln=True, align="C")
@@ -335,6 +335,52 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
     return pdf_bytes
 
 # ============================
+# Funções de Reset
+# ============================
+
+def reset_novo_orcamento_state():
+    """Reseta todos os campos do formulário de Novo Orçamento."""
+    # Resetar campos principais
+    st.session_state["Cliente_nome"] = ""
+    st.session_state["Cliente_CNPJ"] = ""
+    st.session_state["tipo_cliente"] = " "
+    st.session_state["estado"] = "SP"
+    st.session_state["tipo_pedido"] = "Direta"
+    st.session_state["frete_sel"] = "CIF"
+    st.session_state["obs"] = ""
+    st.session_state["vend_nome"] = ""
+    st.session_state["vend_tel"] = ""
+    st.session_state["vend_email"] = ""
+    st.session_state["preco_m2"] = 0.0
+    st.session_state["menu_index"] = 0 
+    
+    # Resetar listas e seletores de itens
+    st.session_state["produto_sel"] = " "
+    st.session_state["tipo_prod_sel"] = "Confeccionado"
+    st.session_state["comp_conf"] = 1.0 
+    st.session_state["larg_conf"] = 1.0 
+    st.session_state["qtd_conf"] = 1
+    st.session_state["comp_bob"] = 50.0
+    st.session_state["larg_bob"] = 1.4
+    st.session_state["qtd_bob"] = 1
+    # Se 'esp_bob' existe (foi usado), reseta
+    if "esp_bob" in st.session_state:
+        st.session_state["esp_bob"] = 0.10
+        
+    st.session_state["itens_confeccionados"] = []
+    st.session_state["bobinas_adicionadas"] = []
+    
+    st.rerun() 
+
+def reset_historico_filters():
+    """Reseta todos os filtros do Histórico de Orçamentos."""
+    st.session_state["filtro_cliente"] = "Todos"
+    st.session_state["filtro_cnpj"] = "Todos"
+    st.session_state["filtro_id"] = ""
+    # Não resetamos o 'filtro_datas' diretamente, pois ele se reajustará ao intervalo padrão de todos os orçamentos após o rerun.
+    st.rerun() 
+
+# ============================
 # Inicialização
 # ============================
 init_db()
@@ -346,7 +392,10 @@ defaults = {
     "tipo_pedido": "Direta", "preco_m2": 0.0, "itens_confeccionados": [],
     "bobinas_adicionadas": [], "frete_sel": "CIF", "obs": "",
     "vend_nome": "", "vend_tel": "", "vend_email": "",
-    "menu_index": 0 # Controla o índice do menu
+    "menu_index": 0,
+    "filtro_cliente": "Todos", # Adicionado para filtro
+    "filtro_cnpj": "Todos",   # Adicionado para filtro
+    "filtro_id": "",          # Adicionado para filtro
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -363,11 +412,10 @@ menu_options = ["Novo Orçamento","Histórico de Orçamentos"]
 menu = st.sidebar.selectbox(
     "Menu", 
     menu_options, 
-    index=st.session_state['menu_index'], # Usa o índice controlado pelo session state
-    key='main_menu_select' # Chave para controle explícito
+    index=st.session_state['menu_index'], 
+    key='main_menu_select' 
 )
 
-# Atualiza o menu_index se o usuário mudou o menu manualmente
 if menu != menu_options[st.session_state['menu_index']]:
     st.session_state['menu_index'] = menu_options.index(menu)
 
@@ -398,6 +446,10 @@ st_por_estado.update({
 # Interface - Novo Orçamento
 # ============================
 if menu == "Novo Orçamento":
+    # Botão de Limpar Formulário (Novo)
+    st.button("🧹 Limpar Formulário", on_click=reset_novo_orcamento_state, key="clear_novo_orc_form")
+    st.markdown("---")
+    
     brasilia_tz = pytz.timezone("America/Sao_Paulo")
     data_hora_brasilia = datetime.now(brasilia_tz).strftime("%d/%m/%Y %H:%M")
     st.markdown(f"🕒 **Data e Hora:** {data_hora_brasilia}")
@@ -457,11 +509,11 @@ if menu == "Novo Orçamento":
         st.subheader("➕ Adicionar Item Confeccionado")
         col1, col2, col3 = st.columns(3)
         with col1:
-            comprimento = st.number_input("Comprimento (m):", min_value=0.010, value=1.0, step=0.10, key="comp_conf")
+            comprimento = st.number_input("Comprimento (m):", min_value=0.010, value=st.session_state.get("comp_conf", 1.0), step=0.10, key="comp_conf")
         with col2:
-            largura = st.number_input("Largura (m):", min_value=0.010, value=1.0, step=0.10, key="larg_conf")
+            largura = st.number_input("Largura (m):", min_value=0.010, value=st.session_state.get("larg_conf", 1.0), step=0.10, key="larg_conf")
         with col3:
-            quantidade = st.number_input("Quantidade:", min_value=1, value=1, step=1, key="qtd_conf")
+            quantidade = st.number_input("Quantidade:", min_value=1, value=st.session_state.get("qtd_conf", 1), step=1, key="qtd_conf")
 
         if st.button("➕ Adicionar Medida", key="add_conf"):
             st.session_state['itens_confeccionados'].append({
@@ -485,6 +537,7 @@ if menu == "Novo Orçamento":
                         f"= {area_item:.2f} m² → {_format_brl(valor_item)}"
                     )
                 with col2:
+                    # Usando chaves únicas para inputs dinâmicos
                     cor = st.text_input("Cor:", value=item['cor'], key=f"cor_conf_{idx}")
                     st.session_state['itens_confeccionados'][idx]['cor'] = cor
                 with col4:
@@ -492,7 +545,7 @@ if menu == "Novo Orçamento":
                     if remover:
                         st.session_state['itens_confeccionados'].pop(idx)
                         st.rerun()
-        if st.button("🧹 Limpar Itens", key="limpar_conf"):
+        if st.button("🧹 Limpar Itens Confeccionados", key="limpar_conf_list"):
             st.session_state['itens_confeccionados'] = []
             st.rerun()
 
@@ -517,15 +570,15 @@ if menu == "Novo Orçamento":
         st.subheader("➕ Adicionar Bobina")
         col1, col2, col3 = st.columns(3)
         with col1:
-            comprimento = st.number_input("Comprimento (m):", min_value=0.010, value=50.0, step=0.10, key="comp_bob")
+            comprimento = st.number_input("Comprimento (m):", min_value=0.010, value=st.session_state.get("comp_bob", 50.0), step=0.10, key="comp_bob")
         with col2:
-            largura_bobina = st.number_input("Largura da Bobina (m):", min_value=0.010, value=1.4, step=0.010, key="larg_bob")
+            largura_bobina = st.number_input("Largura da Bobina (m):", min_value=0.010, value=st.session_state.get("larg_bob", 1.4), step=0.010, key="larg_bob")
         with col3:
-            quantidade = st.number_input("Quantidade:", min_value=1, value=1, step=1, key="qtd_bob")
+            quantidade = st.number_input("Quantidade:", min_value=1, value=st.session_state.get("qtd_bob", 1), step=1, key="qtd_bob")
 
         espessura_bobina = None
         if produto.startswith(prefixos_espessura):
-            espessura_bobina = st.number_input("Espessura da Bobina (mm):", min_value=0.010, value=0.10, step=0.010, key="esp_bob")
+            espessura_bobina = st.number_input("Espessura da Bobina (mm):", min_value=0.010, value=st.session_state.get("esp_bob", 0.10), step=0.010, key="esp_bob")
 
         if st.button("➕ Adicionar Bobina", key="add_bob"):
             item_bobina = {
@@ -578,7 +631,7 @@ if menu == "Novo Orçamento":
             else:
                 st.write(f"💰 Valor Final: **{_format_brl(valor_final_bob)}**")
 
-            if st.button("🧹 Limpar Bobinas", key="limpar_bob"):
+            if st.button("🧹 Limpar Bobinas", key="limpar_bob_list"):
                 st.session_state['bobinas_adicionadas'] = []
                 st.rerun()
 
@@ -629,9 +682,9 @@ if menu == "Novo Orçamento":
         resumo_conf = calcular_valores_confeccionados(st.session_state["itens_confeccionados"], st.session_state.get("preco_m2",0.0), st.session_state.get("tipo_cliente"," "), st.session_state.get("estado",""), st.session_state.get("tipo_pedido","Direta")) if st.session_state["itens_confeccionados"] else None
         resumo_bob = calcular_valores_bobinas(st.session_state["bobinas_adicionadas"], st.session_state.get("preco_m2",0.0), st.session_state.get("tipo_pedido","Direta")) if st.session_state["bobinas_adicionadas"] else None
 
-        # Gerar PDF bytes (ATUALIZADO: Passando orcamento_id)
+        # Gerar PDF bytes (Passando orcamento_id)
         pdf_bytes = gerar_pdf(
-            orcamento_id, # <-- NOVO: ID do orçamento salvo
+            orcamento_id, 
             cliente,
             vendedor,
             st.session_state["itens_confeccionados"],
@@ -653,9 +706,7 @@ if menu == "Novo Orçamento":
         except Exception as e:
             st.warning(f"⚠️ Não foi possível salvar o PDF no disco: {e}")
 
-
         # Download button 
-        download_key = f"download_generated_{orcamento_id}_{int(datetime.now().timestamp())}"
         st.download_button(
             "⬇️ Baixar PDF",
             data=pdf_bytes,
@@ -675,13 +726,20 @@ if menu == "Histórico de Orçamentos":
     else:
         clientes = sorted(list({o[2] for o in orcamentos if o[2]}))
         cnpjs = sorted(list({o[3] for o in orcamentos if o[3]}))
+        
+        # Filtro por ID (Novo)
+        orc_id_filtro = st.text_input("Filtrar por ID do Orçamento:", value=st.session_state.get("filtro_id", ""), key="filtro_id")
+
+        # Filtros de Seleção (mantendo state)
         cliente_filtro = st.selectbox("Filtrar por cliente:", ["Todos"] + clientes, key="filtro_cliente")
         cnpj_filtro = st.selectbox("Filtrar por CNPJ:", ["Todos"] + cnpjs, key="filtro_cnpj")
         
+        # Botão Limpar Filtros (Novo)
+        st.button("🧹 Limpar Filtros", on_click=reset_historico_filters, key="clear_historico_filters")
+
         datas = [datetime.strptime(o[1], "%d/%m/%Y %H:%M") for o in orcamentos]
         min_data = min(datas) if datas else datetime.now(pytz.timezone("America/Sao_Paulo"))
         max_budget_date = max(datas).date() if datas else datetime.now(pytz.timezone("America/Sao_Paulo")).date()
-        
         max_possible_date = datetime.now(pytz.timezone("America/Sao_Paulo")).date()
 
         data_inicio, data_fim = st.date_input(
@@ -696,10 +754,19 @@ if menu == "Histórico de Orçamentos":
         for o in orcamentos:
             orc_id, data_hora, cliente_nome, cliente_cnpj, vendedor_nome = o
             data_obj = datetime.strptime(data_hora, "%d/%m/%Y %H:%M")
+
+            # Lógica de Filtragem
+            id_ok = True
+            if orc_id_filtro:
+                # Permite pesquisa por prefixo do ID (string)
+                if not str(orc_id).startswith(orc_id_filtro):
+                    id_ok = False
+
             cliente_ok = (cliente_filtro == "Todos" or cliente_nome == cliente_filtro)
             cnpj_ok = (cnpj_filtro == "Todos" or cliente_cnpj == cnpj_filtro)
             data_ok = (data_inicio <= data_obj.date() <= data_fim) 
-            if cliente_ok and cnpj_ok and data_ok:
+            
+            if cliente_ok and cnpj_ok and data_ok and id_ok:
                 orcamentos_filtrados.append(o)
 
         if not orcamentos_filtrados:
@@ -772,7 +839,7 @@ if menu == "Histórico de Orçamentos":
                     st.markdown(f"**CNPJ:** {cliente_cnpj}")
                     st.markdown(f"**Vendedor:** {vendedor_nome}")
                     preco_m2_base_display = orc_data.get('preco_m2_base') if orc_data.get('preco_m2_base') is not None else 0.0
-                    st.markdown(f"**Preço Base Utilizado (💵):** {_format_brl(preco_m2_base_display)}")
+                    st.markdown(f"**Preço Base Utilizado (R$):** {_format_brl(preco_m2_base_display)}")
 
                     if confecc:
                         st.markdown("### ⬛ Itens Confeccionados")
@@ -787,7 +854,7 @@ if menu == "Histórico de Orçamentos":
 
                     col1, col2, col3 = st.columns([1,1,1])
                     with col1:
-                        # Reabrir (ATUALIZADO: Força o índice do menu e reruns)
+                        # Reabrir
                         if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
                             
                             preco_m2_base = orc_data.get('preco_m2_base') if orc_data.get('preco_m2_base') is not None else 0.0
@@ -813,15 +880,15 @@ if menu == "Histórico de Orçamentos":
                                 "produto_sel": primeiro_produto if primeiro_produto else " ", 
                                 "itens_confeccionados": [dict(zip(['produto','comprimento','largura','quantidade','cor'],c)) for c in confecc],
                                 "bobinas_adicionadas": [dict(zip(['produto','comprimento','largura','quantidade','cor','espessura','preco_unitario'],b)) for b in bob],
-                                "menu_index": 0 # Força a seleção do menu para "Novo Orçamento" (índice 0)
+                                "menu_index": 0 
                             })
                             st.success(f"Orçamento ID {orc_id} carregado no formulário.")
-                            st.rerun() # Reinicia a aplicação para aplicar a mudança de menu
+                            st.rerun()
 
                     with col2:
-                        # Baixar PDF (ATUALIZADO: Passando orc_id)
+                        # Baixar PDF 
                         pdf_bytes = gerar_pdf(
-                            orc_id, # <-- NOVO: ID do orçamento
+                            orc_id, 
                             cliente={
                                 "nome": orc[2],
                                 "cnpj": orc[3],
@@ -849,4 +916,3 @@ if menu == "Histórico de Orçamentos":
                             mime="application/pdf",
                             key=f"download_historico_{orc_id}"
                         )
-                    
