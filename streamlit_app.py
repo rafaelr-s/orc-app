@@ -8,7 +8,7 @@ import pandas as pd
 from io import BytesIO
 
 # ============================
-# Funções de Banco de Dados
+# Banco SQLite
 # ============================
 def init_db():
     conn = sqlite3.connect("orcamentos.db")
@@ -16,167 +16,319 @@ def init_db():
     cur.execute("""
         CREATE TABLE IF NOT EXISTS orcamentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            data TEXT,
-            cliente TEXT,
-            cnpj TEXT,
+            data_hora TEXT,
+            cliente_nome TEXT,
+            cliente_cnpj TEXT,
             tipo_cliente TEXT,
             estado TEXT,
+            frete TEXT,
             tipo_pedido TEXT,
-            frete REAL,
-            icms REAL,
-            st REAL,
-            ipi REAL,
-            itens TEXT,
-            valor_bruto REAL,
-            valor_final REAL
+            vendedor_nome TEXT,
+            vendedor_tel TEXT,
+            vendedor_email TEXT,
+            observacao TEXT
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS itens_confeccionados (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            orcamento_id INTEGER,
+            produto TEXT,
+            comprimento REAL,
+            largura REAL,
+            quantidade INTEGER,
+            cor TEXT,
+            FOREIGN KEY (orcamento_id) REFERENCES orcamentos(id)
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS itens_bobinas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            orcamento_id INTEGER,
+            produto TEXT,
+            comprimento REAL,
+            largura REAL,
+            quantidade INTEGER,
+            cor TEXT,
+            espessura REAL,
+            preco_unitario REAL,
+            FOREIGN KEY (orcamento_id) REFERENCES orcamentos(id)
         )
     """)
     conn.commit()
     conn.close()
 
-def salvar_orcamento(dados):
+def salvar_orcamento(cliente, vendedor, itens_confeccionados, itens_bobinas, observacao):
     conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
+
     cur.execute("""
-        INSERT INTO orcamentos (data, cliente, cnpj, tipo_cliente, estado, tipo_pedido,
-                                frete, icms, st, ipi, itens, valor_bruto, valor_final)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, dados)
+        INSERT INTO orcamentos (data_hora, cliente_nome, cliente_cnpj, tipo_cliente, estado, frete, tipo_pedido, vendedor_nome, vendedor_tel, vendedor_email, observacao)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        datetime.now(pytz.timezone("America/Sao_Paulo")).strftime("%d/%m/%Y %H:%M"),
+        cliente.get("nome",""),
+        cliente.get("cnpj",""),
+        cliente.get("tipo_cliente",""),
+        cliente.get("estado",""),
+        cliente.get("frete",""),
+        cliente.get("tipo_pedido",""),
+        vendedor.get("nome",""),
+        vendedor.get("tel",""),
+        vendedor.get("email",""),
+        observacao
+    ))
+    orcamento_id = cur.lastrowid
+
+    for item in itens_confeccionados:
+        cur.execute("""
+            INSERT INTO itens_confeccionados (orcamento_id, produto, comprimento, largura, quantidade, cor)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (orcamento_id, item['produto'], item['comprimento'], item['largura'], item['quantidade'], item.get('cor','')))
+
+    for item in itens_bobinas:
+        cur.execute("""
+            INSERT INTO itens_bobinas (orcamento_id, produto, comprimento, largura, quantidade, cor, espessura, preco_unitario)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (orcamento_id, item['produto'], item['comprimento'], item['largura'], item['quantidade'], item.get('cor',''), item.get('espessura'), item.get('preco_unitario')))
+
     conn.commit()
     conn.close()
+    return orcamento_id
 
-def carregar_orcamentos(filtro=None):
+def buscar_orcamentos():
     conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
-    limite_data = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d %H:%M:%S")
-
-    if filtro:
-        cur.execute("""
-            SELECT id, data, cliente, cnpj, tipo_cliente, estado, tipo_pedido,
-                   frete, icms, st, ipi, itens, valor_bruto, valor_final
-            FROM orcamentos
-            WHERE id LIKE ? OR cliente LIKE ? OR cnpj LIKE ? OR data LIKE ?
-            ORDER BY data DESC
-        """, (f"%{filtro}%", f"%{filtro}%", f"%{filtro}%", f"%{filtro}%"))
-    else:
-        cur.execute("""
-            SELECT id, data, cliente, cnpj, tipo_cliente, estado, tipo_pedido,
-                   frete, icms, st, ipi, itens, valor_bruto, valor_final
-            FROM orcamentos
-            WHERE data >= ?
-            ORDER BY data DESC
-        """, (limite_data,))
-    
+    cur.execute("SELECT id, data_hora, cliente_nome, vendedor_nome FROM orcamentos ORDER BY id DESC")
     rows = cur.fetchall()
     conn.close()
     return rows
 
-def carregar_orcamento_por_id(orc_id):
+def carregar_orcamento_por_id(orcamento_id):
     conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
-    cur.execute("""
-        SELECT id, data, cliente, cnpj, tipo_cliente, estado, tipo_pedido,
-               frete, icms, st, ipi, itens, valor_bruto, valor_final
-        FROM orcamentos
-        WHERE id = ?
-    """, (orc_id,))
-    row = cur.fetchone()
+    cur.execute("SELECT * FROM orcamentos WHERE id=?", (orcamento_id,))
+    orc = cur.fetchone()
+    cur.execute("SELECT produto, comprimento, largura, quantidade, cor FROM itens_confeccionados WHERE orcamento_id=?", (orcamento_id,))
+    confecc = cur.fetchall()
+    cur.execute("SELECT produto, comprimento, largura, quantidade, cor, espessura, preco_unitario FROM itens_bobinas WHERE orcamento_id=?", (orcamento_id,))
+    bob = cur.fetchall()
     conn.close()
-    return row
+    return orc, confecc, bob
 
 # ============================
-# Função para exportar Excel
+# Formatação R$
 # ============================
-def exportar_excel(orcamentos):
-    df = pd.DataFrame(orcamentos, columns=[
-        "ID", "Data", "Cliente", "CNPJ", "Tipo Cliente", "Estado", "Tipo Pedido",
-        "Frete", "ICMS", "ST", "IPI", "Itens", "Valor Bruto", "Valor Final"
-    ])
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Orçamentos")
-    return output.getvalue()
+def _format_brl(v):
+    try:
+        return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except Exception:
+        return f"R$ {v}"
 
 # ============================
-# Configuração inicial
+# Cálculos (pequenas proteções)
 # ============================
-st.set_page_config(page_title="Gestão de Orçamentos", layout="wide")
+st_por_estado = {}  # declarado cedo, depois definido mais abaixo
+
+def calcular_valores_confeccionados(itens, preco_m2, tipo_cliente="", estado="", tipo_pedido="Direta"):
+    if not itens:
+        return 0.0, 0.0, 0.0, 0.0, 0.0, 0
+    m2_total = sum(item['comprimento'] * item['largura'] * item['quantidade'] for item in itens)
+    valor_bruto = m2_total * preco_m2
+
+    if tipo_pedido == "Industrialização":
+        valor_ipi = 0
+        valor_st = 0
+        aliquota_st = 0
+        valor_final = valor_bruto
+    else:
+        valor_ipi = valor_bruto * 0.0325
+        valor_final = valor_bruto + valor_ipi
+        valor_st = 0
+        aliquota_st = 0
+        if any(item.get('produto') == "Encerado" for item in itens) and tipo_cliente == "Revenda":
+            aliquota_st = st_por_estado.get(estado, 0)
+            valor_st = valor_final * aliquota_st / 100
+            valor_final += valor_st
+
+    return m2_total, valor_bruto, valor_ipi, valor_final, valor_st, aliquota_st
+
+def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
+    if not itens:
+        return 0.0, 0.0, 0.0, 0.0
+    # m_total: soma dos metros (comprimento * quantidade)
+    m_total = sum(item['comprimento'] * item['quantidade'] for item in itens)
+    # valor bruto: usar preco_unitario se NÃO for None, senão usar preco_m2
+    def preco_item_of(item):
+        pu = item.get('preco_unitario')  # pode ser None
+        return pu if (pu is not None) else preco_m2
+
+    valor_bruto = sum((item['comprimento'] * item['quantidade']) * preco_item_of(item) for item in itens)
+
+    if tipo_pedido == "Industrialização":
+        valor_ipi = 0
+        valor_final = valor_bruto
+    else:
+        valor_ipi = valor_bruto * 0.0975
+        valor_final = valor_bruto + valor_ipi
+
+    return m_total, valor_bruto, valor_ipi, valor_final
+
+# ============================
+# Função para gerar PDF (retorna bytes)
+# ============================
+def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_conf, resumo_bob, observacao, preco_m2, tipo_cliente="", estado=""):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_font("Arial", "B", 14)
+
+    # Cabeçalho
+    pdf.cell(0, 12, "Orçamento - Grupo Locomotiva", ln=True, align="C")
+    pdf.ln(10)
+    pdf.set_font("Arial", size=9)
+    brasilia_tz = pytz.timezone("America/Sao_Paulo")
+    pdf.cell(0, 6, f"Data e Hora: {datetime.now(brasilia_tz).strftime('%d/%m/%Y %H:%M')}", ln=True)
+    pdf.cell(0, 6, "Validade da Cotação: 7 dias corridos.", ln=True, align="L")
+    pdf.ln(4)
+
+    # Dados do Cliente
+    pdf.set_font("Arial", "B", 11)
+    pdf.cell(0, 6, "Cliente", ln=True)
+    pdf.set_font("Arial", size=10)
+    largura_util = pdf.w - 2*pdf.l_margin
+
+    for chave in ["nome", "cnpj", "tipo_cliente", "estado", "frete", "tipo_pedido"]:
+        valor = str(cliente.get(chave, "") or "")
+        if valor.strip():
+            pdf.cell(0, 6, f"{chave.replace('_',' ').title()}: {valor}", align="L")
+            pdf.ln(5)
+    pdf.ln(5)
+
+    # Itens Confeccionados
+    if itens_confeccionados:
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(0, 8, "Itens Confeccionados", ln=True)
+        pdf.set_font("Arial", size=8)
+        for item in itens_confeccionados:
+            area_item = item['comprimento'] * item['largura'] * item['quantidade']
+            valor_item = area_item * preco_m2
+            txt = (
+                f"{item['quantidade']}x {item['produto']} - {item['comprimento']}m x {item['largura']}m "
+                f"| Cor: {item.get('cor','')} | Valor Bruto: {_format_brl(valor_item)}"
+            )
+            pdf.multi_cell(largura_util, 6, txt)
+            pdf.ln(1)
+
+    # Resumo Confeccionados
+    if resumo_conf:
+        m2_total, valor_bruto, valor_ipi, valor_final, valor_st, aliquota_st = resumo_conf
+        pdf.ln(3)
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(0, 10, "Resumo - Confeccionados", ln=True)
+        pdf.set_font("Arial", "", 10)
+        pdf.cell(0, 8, f"Preço por m² utilizado: {_format_brl(preco_m2)}", ln=True)
+        pdf.cell(0, 8, f"Área Total: {str(f'{m2_total:.2f}'.replace('.', ','))} m²", ln=True)
+        pdf.cell(0, 8, f"Valor Bruto: {_format_brl(valor_bruto)}", ln=True)
+        if valor_ipi>0:
+            pdf.cell(0, 8, f"IPI: {_format_brl(valor_ipi)}", ln=True)
+        if valor_st>0:
+            pdf.cell(0, 8, f"ST ({aliquota_st}%): {_format_brl(valor_st)}", ln=True)
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(0, 8, f"Valor Total: {_format_brl(valor_final)}", ln=True)
+        pdf.set_font("Arial", "", 10)
+        pdf.ln(10)
+
+    # Itens Bobinas
+    if itens_bobinas:
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(0, 8, "Itens Bobina", ln=True)
+        pdf.set_font("Arial", size=8)
+        for item in itens_bobinas:
+            metros_item = item['comprimento'] * item['quantidade']
+            preco_item = item.get('preco_unitario') if item.get('preco_unitario') is not None else preco_m2
+            valor_item = metros_item * preco_item
+            txt = (
+                f"{item['quantidade']}x {item['produto']} - {item['comprimento']}m | Largura: {item['largura']}m "
+                f"| Cor: {item.get('cor','')} | Valor Bruto: {_format_brl(valor_item)}"
+            )
+            if "espessura" in item and item.get('espessura') is not None:
+                esp = f"{item['espessura']:.2f}".replace(".", ",")
+                txt += f" | Esp: {esp} mm"
+                txt += f" | Preço metro: {_format_brl(preco_item)}"
+            pdf.multi_cell(largura_util, 6, txt)
+            pdf.ln(1)
+
+        if resumo_bob:
+            m_total, valor_bruto, valor_ipi, valor_final = resumo_bob
+            pdf.ln(3)
+            pdf.set_font("Arial", "B", 11)
+            pdf.cell(0, 10, "Resumo - Bobinas", ln=True)
+            pdf.set_font("Arial", "", 10)
+            pdf.cell(0, 8, f"Total de Metros Lineares: {str(f'{m_total:.2f}'.replace('.', ','))} m", ln=True)
+            pdf.cell(0, 8, f"Valor Bruto: {_format_brl(valor_bruto)}", ln=True)
+            if valor_ipi>0:
+                pdf.cell(0, 8, f"IPI: {_format_brl(valor_ipi)}", ln=True)
+            pdf.set_font("Arial", "B", 10)
+            pdf.cell(0, 8, f"Valor Total: {_format_brl(valor_final)}", ln=True)
+        pdf.ln(10)
+
+    # Observações
+    if observacao:
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(0, 11, "Observações", ln=True)
+        pdf.set_font("Arial", size=10)
+        pdf.multi_cell(largura_util, 10, str(observacao))
+        pdf.ln(10)
+
+    # Vendedor
+    if vendedor:
+        pdf.set_font("Arial", "", 10)
+        vendedor_txt = (
+            f"Vendedor: {vendedor.get('nome','')}\n"
+            f"Telefone: {vendedor.get('tel','')}\n"
+            f"E-mail: {vendedor.get('email','')}"
+        )
+        pdf.multi_cell(largura_util, 8, vendedor_txt)
+        pdf.ln(5)
+
+    # Retorna bytes do PDF
+    pdf_bytes = pdf.output(dest='S').encode('latin1')
+    return pdf_bytes
+
+# ============================
+# Inicialização
+# ============================
 init_db()
 
-# Controle de sessão
-if "orcamento_edicao" not in st.session_state:
-    st.session_state.orcamento_edicao = None
+# session state defaults for form fields (so reabrir can populate)
+defaults = {
+    "Cliente_nome": "",
+    "Cliente_CNPJ": "",
+    "tipo_cliente": " ",
+    "estado": None,
+    "tipo_pedido": "Direta",
+    "preco_m2": 0.0,
+    "itens_confeccionados": [],
+    "bobinas_adicionadas": [],
+    "frete_sel": "CIF",
+    "obs": "",
+    "vend_nome": "",
+    "vend_tel": "",
+    "vend_email": ""
+}
+for k, v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
 # ============================
-# Menu lateral
+# Configuração Streamlit
 # ============================
-menu = st.sidebar.radio("📌 Menu", ["Novo Orçamento", "Histórico de Orçamentos"])
+st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", layout="centered")
+st.title("Orçamento - Grupo Locomotiva")
 
-# ============================
-# Página - Novo Orçamento
-# ============================
-if menu == "Novo Orçamento":
-    st.title("Cadastro de Orçamento")
-
-    if st.session_state.orcamento_edicao:
-        dados = st.session_state.orcamento_edicao
-        st.info(f"Reabrindo orçamento ID: {dados[0]}")
-    else:
-        dados = [None, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "", "", "", "", "",
-                 0.0, 0.0, 0.0, 0.0, "", 0.0, 0.0]
-
-    cliente = st.text_input("Cliente", value=dados[2])
-    cnpj = st.text_input("CNPJ", value=dados[3])
-    tipo_cliente = st.text_input("Tipo Cliente", value=dados[4])
-    estado = st.text_input("Estado", value=dados[5])
-    tipo_pedido = st.text_input("Tipo Pedido", value=dados[6])
-    frete = st.number_input("Frete", value=float(dados[7]))
-    icms = st.number_input("ICMS", value=float(dados[8]))
-    st_val = st.number_input("ST", value=float(dados[9]))
-    ipi = st.number_input("IPI", value=float(dados[10]))
-    itens = st.text_area("Itens", value=dados[11])
-    valor_bruto = st.number_input("Valor Bruto", value=float(dados[12]))
-    valor_final = st.number_input("Valor Final", value=float(dados[13]))
-
-    if st.button("Salvar Orçamento"):
-        salvar_orcamento((
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            cliente, cnpj, tipo_cliente, estado, tipo_pedido,
-            frete, icms, st_val, ipi, itens, valor_bruto, valor_final
-        ))
-        st.success("Orçamento salvo com sucesso!")
-        st.session_state.orcamento_edicao = None  # limpa após salvar
-
-# ============================
-# Página - Histórico
-# ============================
-elif menu == "Histórico de Orçamentos":
-    st.title("Histórico de Orçamentos")
-
-    filtro = st.text_input("Buscar por ID, Cliente, CNPJ ou Data")
-    orcamentos = carregar_orcamentos(filtro)
-
-    if orcamentos:
-        df = pd.DataFrame(orcamentos, columns=[
-            "ID", "Data", "Cliente", "CNPJ", "Tipo Cliente", "Estado", "Tipo Pedido",
-            "Frete", "ICMS", "ST", "IPI", "Itens", "Valor Bruto", "Valor Final"
-        ])
-        st.dataframe(df)
-
-        selected_id = st.number_input("ID do orçamento para reabrir", step=1, format="%d")
-        if st.button("Reabrir Orçamento"):
-            dados = carregar_orcamento_por_id(selected_id)
-            if dados:
-                st.session_state.orcamento_edicao = dados
-                st.success(f"Orçamento {selected_id} carregado! Vá para 'Novo Orçamento' para editar.")
-            else:
-                st.error("Orçamento não encontrado.")
-
-        excel_data = exportar_excel(orcamentos)
-        st.download_button("Exportar para Excel", data=excel_data,
-                           file_name="orcamentos.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    else:
-        st.info("Nenhum orçamento encontrado.")
+# --- Menu ---
+menu = st.sidebar.selectbox("Menu", ["Novo Orçamento","Histórico de Orçamentos"], index=0)
 
 # ============================
 # Tabelas de ICMS e ST
