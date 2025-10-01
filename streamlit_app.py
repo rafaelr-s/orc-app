@@ -1,6 +1,6 @@
 import os
 import streamlit as st
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 from fpdf import FPDF
 import sqlite3
@@ -8,126 +8,100 @@ import pandas as pd
 from io import BytesIO
 
 # ============================
-# Banco de Dados
+# Funções de Banco de Dados
 # ============================
 def init_db():
     conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
-
-    # Tabela principal de orçamentos
     cur.execute("""
         CREATE TABLE IF NOT EXISTS orcamentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            cliente_nome TEXT,
-            cliente_cnpj TEXT,
-            vendedor_nome TEXT,
-            observacao TEXT,
-            valor_final REAL,
-            data TEXT
+            data TEXT,
+            cliente TEXT,
+            cnpj TEXT,
+            tipo_cliente TEXT,
+            estado TEXT,
+            tipo_pedido TEXT,
+            frete REAL,
+            icms REAL,
+            st REAL,
+            ipi REAL,
+            itens TEXT,
+            valor_bruto REAL,
+            valor_final REAL
         )
     """)
-
-    # Itens confeccionados
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS itens_confeccionados (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            orcamento_id INTEGER,
-            produto TEXT,
-            quantidade REAL,
-            preco_unitario REAL,
-            total REAL,
-            FOREIGN KEY (orcamento_id) REFERENCES orcamentos (id)
-        )
-    """)
-
-    # Itens bobinas
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS itens_bobinas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            orcamento_id INTEGER,
-            produto TEXT,
-            metragem REAL,
-            preco_metro REAL,
-            total REAL,
-            FOREIGN KEY (orcamento_id) REFERENCES orcamentos (id)
-        )
-    """)
-
     conn.commit()
     conn.close()
 
-# ============================
-# Funções do Banco
-# ============================
-def salvar_orcamento(cliente_nome, cliente_cnpj, vendedor_nome, observacao, valor_final, itens_conf, itens_bobinas):
+def salvar_orcamento(data, cliente, cnpj, tipo_cliente, estado, tipo_pedido,
+                     frete, icms, st, ipi, itens, valor_bruto, valor_final):
     conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
-
-    data = datetime.now(pytz.timezone("America/Sao_Paulo")).strftime("%d/%m/%Y %H:%M")
-
-    # Salva orçamento principal
     cur.execute("""
-        INSERT INTO orcamentos (cliente_nome, cliente_cnpj, vendedor_nome, observacao, valor_final, data)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (cliente_nome, cliente_cnpj, vendedor_nome, observacao, valor_final, data))
-    orcamento_id = cur.lastrowid
-
-    # Itens confeccionados
-    for item in itens_conf:
-        cur.execute("""
-            INSERT INTO itens_confeccionados (orcamento_id, produto, quantidade, preco_unitario, total)
-            VALUES (?, ?, ?, ?, ?)
-        """, (orcamento_id, item["produto"], item["quantidade"], item["preco_unitario"], item["total"]))
-
-    # Itens bobinas
-    for item in itens_bobinas:
-        cur.execute("""
-            INSERT INTO itens_bobinas (orcamento_id, produto, metragem, preco_metro, total)
-            VALUES (?, ?, ?, ?, ?)
-        """, (orcamento_id, item["produto"], item["metragem"], item["preco_metro"], item["total"]))
-
+        INSERT INTO orcamentos
+        (data, cliente, cnpj, tipo_cliente, estado, tipo_pedido, frete,
+         icms, st, ipi, itens, valor_bruto, valor_final)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (data, cliente, cnpj, tipo_cliente, estado, tipo_pedido, frete,
+          icms, st, ipi, itens, valor_bruto, valor_final))
     conn.commit()
     conn.close()
-    return orcamento_id
 
-def carregar_orcamentos():
+def carregar_orcamentos(filtro=None):
     conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
-    cur.execute("SELECT * FROM orcamentos ORDER BY id DESC")
+
+    limite_data = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d %H:%M:%S")
+
+    if filtro:
+        cur.execute("""
+            SELECT id, data, cliente, cnpj, tipo_cliente, estado, tipo_pedido,
+                   frete, icms, st, ipi, itens, valor_bruto, valor_final
+            FROM orcamentos
+            WHERE id LIKE ? OR cliente LIKE ? OR cnpj LIKE ? OR data LIKE ?
+            ORDER BY data DESC
+        """, (f"%{filtro}%", f"%{filtro}%", f"%{filtro}%", f"%{filtro}%"))
+    else:
+        cur.execute("""
+            SELECT id, data, cliente, cnpj, tipo_cliente, estado, tipo_pedido,
+                   frete, icms, st, ipi, itens, valor_bruto, valor_final
+            FROM orcamentos
+            WHERE data >= ?
+            ORDER BY data DESC
+        """, (limite_data,))
+
     rows = cur.fetchall()
     conn.close()
     return rows
 
 # ============================
-# Exportar Excel
+# Função para exportar Excel
 # ============================
 def exportar_excel(orcamentos):
     dados_export = []
-    for orc in orcamentos:
-        orc_id = orc[0]
-        cliente_nome = orc[1]
-        cliente_cnpj = orc[2]
-        vendedor_nome = orc[3]
-        observacao = orc[4]
-        valor_final = orc[5]
-        data = orc[6]
-
+    for o in orcamentos:
         dados_export.append({
-            "ID Orçamento": orc_id,
-            "Cliente": cliente_nome,
-            "CNPJ/CPF": cliente_cnpj,
-            "Vendedor": vendedor_nome,
-            "Observação": observacao,
-            "Valor Final (R$)": valor_final,
-            "Data": data
+            "ID": o[0],
+            "Data": o[1],
+            "Cliente": o[2],
+            "CNPJ": o[3],
+            "Tipo Cliente": o[4],
+            "Estado": o[5],
+            "Tipo Pedido": o[6],
+            "Frete": o[7],
+            "ICMS": o[8],
+            "ST": o[9],
+            "IPI": o[10],
+            "Itens": o[11],
+            "Valor Bruto": o[12],
+            "Valor Final": o[13]
         })
-
     df = pd.DataFrame(dados_export)
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Orçamentos")
-    processed_data = output.getvalue()
-    return processed_data
+    return output.getvalue()
 
 # ============================
 # Formatação R$
