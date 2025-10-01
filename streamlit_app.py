@@ -335,7 +335,7 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
     return pdf_bytes
 
 # ============================
-# Funções de Reset
+# Funções de Reset (CORRIGIDAS)
 # ============================
 
 def reset_novo_orcamento_state():
@@ -363,22 +363,20 @@ def reset_novo_orcamento_state():
     st.session_state["comp_bob"] = 50.0
     st.session_state["larg_bob"] = 1.4
     st.session_state["qtd_bob"] = 1
-    # Se 'esp_bob' existe (foi usado), reseta
     if "esp_bob" in st.session_state:
         st.session_state["esp_bob"] = 0.10
         
     st.session_state["itens_confeccionados"] = []
     st.session_state["bobinas_adicionadas"] = []
     
-    st.rerun() 
+    # st.rerun() REMOVIDO: O Streamlit faz o rerun automaticamente após a função on_click.
 
 def reset_historico_filters():
     """Reseta todos os filtros do Histórico de Orçamentos."""
     st.session_state["filtro_cliente"] = "Todos"
     st.session_state["filtro_cnpj"] = "Todos"
     st.session_state["filtro_id"] = ""
-    # Não resetamos o 'filtro_datas' diretamente, pois ele se reajustará ao intervalo padrão de todos os orçamentos após o rerun.
-    st.rerun() 
+    # st.rerun() REMOVIDO: O Streamlit faz o rerun automaticamente após a função on_click.
 
 # ============================
 # Inicialização
@@ -393,9 +391,9 @@ defaults = {
     "bobinas_adicionadas": [], "frete_sel": "CIF", "obs": "",
     "vend_nome": "", "vend_tel": "", "vend_email": "",
     "menu_index": 0,
-    "filtro_cliente": "Todos", # Adicionado para filtro
-    "filtro_cnpj": "Todos",   # Adicionado para filtro
-    "filtro_id": "",          # Adicionado para filtro
+    "filtro_cliente": "Todos", 
+    "filtro_cnpj": "Todos",   
+    "filtro_id": "",          
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -446,7 +444,7 @@ st_por_estado.update({
 # Interface - Novo Orçamento
 # ============================
 if menu == "Novo Orçamento":
-    # Botão de Limpar Formulário (Novo)
+    # Botão de Limpar Formulário
     st.button("🧹 Limpar Formulário", on_click=reset_novo_orcamento_state, key="clear_novo_orc_form")
     st.markdown("---")
     
@@ -727,14 +725,14 @@ if menu == "Histórico de Orçamentos":
         clientes = sorted(list({o[2] for o in orcamentos if o[2]}))
         cnpjs = sorted(list({o[3] for o in orcamentos if o[3]}))
         
-        # Filtro por ID (Novo)
+        # Filtro por ID
         orc_id_filtro = st.text_input("Filtrar por ID do Orçamento:", value=st.session_state.get("filtro_id", ""), key="filtro_id")
 
-        # Filtros de Seleção (mantendo state)
+        # Filtros de Seleção
         cliente_filtro = st.selectbox("Filtrar por cliente:", ["Todos"] + clientes, key="filtro_cliente")
         cnpj_filtro = st.selectbox("Filtrar por CNPJ:", ["Todos"] + cnpjs, key="filtro_cnpj")
         
-        # Botão Limpar Filtros (Novo)
+        # Botão Limpar Filtros
         st.button("🧹 Limpar Filtros", on_click=reset_historico_filters, key="clear_historico_filters")
 
         datas = [datetime.strptime(o[1], "%d/%m/%Y %H:%M") for o in orcamentos]
@@ -758,7 +756,6 @@ if menu == "Histórico de Orçamentos":
             # Lógica de Filtragem
             id_ok = True
             if orc_id_filtro:
-                # Permite pesquisa por prefixo do ID (string)
                 if not str(orc_id).startswith(orc_id_filtro):
                     id_ok = False
 
@@ -916,3 +913,14 @@ if menu == "Histórico de Orçamentos":
                             mime="application/pdf",
                             key=f"download_historico_{orc_id}"
                         )
+                    with col3:
+                        if st.button("❌ Excluir", key=f"excluir_{orc_id}"):
+                            conn = sqlite3.connect(DB_NAME) 
+                            cur = conn.cursor()
+                            cur.execute("DELETE FROM orcamentos WHERE id=?", (orc_id,))
+                            cur.execute("DELETE FROM itens_confeccionados WHERE orcamento_id=?", (orc_id,))
+                            cur.execute("DELETE FROM itens_bobinas WHERE orcamento_id=?", (orc_id,))
+                            conn.commit()
+                            conn.close()
+                            st.success(f"Orçamento ID {orc_id} excluído!")
+                            st.rerun()
