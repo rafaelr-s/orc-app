@@ -309,13 +309,24 @@ for k, v in defaults.items():
         st.session_state[k] = v
 
 # ============================
-# Configuração Streamlit
+# Streamlit App
 # ============================
-st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", layout="centered")
-st.title("Orçamento - Grupo Locomotiva")
+st.set_page_config(page_title="Orçamentos - Grupo Locomotiva", layout="wide")
+init_db()
 
-# --- Menu ---
-menu = st.sidebar.selectbox("Menu", ["Novo Orçamento","Histórico de Orçamentos"], index=0)
+# Controle de navegação
+if "pagina" not in st.session_state:
+    st.session_state.pagina = "formulario"
+
+def mudar_pagina(p):
+    st.session_state.pagina = p
+
+st.sidebar.title("Menu")
+if st.sidebar.button("Novo Orçamento"):
+    st.session_state.orcamento_edicao = None
+    mudar_pagina("formulario")
+if st.sidebar.button("Histórico de Orçamentos"):
+    mudar_pagina("historico")
 
 # ============================
 # Tabelas de ICMS e ST
@@ -602,29 +613,37 @@ if menu == "Novo Orçamento":
         )
 
 # ============================
-# Página de Histórico
+# Página Histórico
 # ============================
-if menu == "Histórico de Orçamentos":
-    st.subheader("📋 Histórico de Orçamentos Salvos")
+elif st.session_state.pagina == "historico":
+    st.title("📁 Histórico de Orçamentos")
 
-    orcamentos = buscar_orcamentos()
-    if not orcamentos:
-        st.info("Nenhum orçamento encontrado.")
+    filtro = st.text_input("Buscar por ID, Cliente, CNPJ ou Data")
+    orcamentos = carregar_orcamentos(filtro)
+
+    if orcamentos:
+        df = pd.DataFrame(orcamentos, columns=[
+            "ID", "Data", "Cliente", "CNPJ", "Tipo Cliente", "Estado", "Tipo Pedido",
+            "Frete", "ICMS", "ST", "IPI", "Itens", "Valor Bruto", "Valor Final"
+        ])
+        st.dataframe(df)
+
+        selected_id = st.number_input("ID do orçamento para reabrir", step=1, format="%d")
+        if st.button("Reabrir Orçamento"):
+            dados = carregar_orcamento_por_id(selected_id)
+            if dados:
+                st.session_state.orcamento_edicao = dados
+                mudar_pagina("formulario")
+                st.experimental_rerun()
+            else:
+                st.error("Orçamento não encontrado.")
+
+        excel_data = exportar_excel(orcamentos)
+        st.download_button("Exportar para Excel", data=excel_data,
+                           file_name="orcamentos.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     else:
-        # filtros simples
-        clientes = sorted(list({o[2] for o in orcamentos if o[2]}))
-        cliente_filtro = st.selectbox("Filtrar por cliente:", ["Todos"] + clientes, key="filtro_cliente")
-
-        datas = [datetime.strptime(o[1], "%d/%m/%Y %H:%M") for o in orcamentos]
-        min_data, max_data = min(datas), max(datas)
-        data_inicio, data_fim = st.date_input(
-            "Filtrar por intervalo de datas:",
-            (min_data.date(), max_data.date()),
-            min_value=min_data.date(),
-            max_value=max_data.date(),
-            key="filtro_datas"
-        )
-
+        st.info("Nenhum orçamento encontrado.")
+        
         orcamentos_filtrados = []
         for o in orcamentos:
             orc_id, data_hora, cliente_nome, vendedor_nome = o
