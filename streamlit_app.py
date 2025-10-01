@@ -186,9 +186,14 @@ def calcular_valores_confeccionados(itens, preco_m2, tipo_cliente="", estado="",
 
     return m2_total, valor_bruto, valor_ipi, valor_final, valor_st, aliquota_st
 
+# FUNÇÃO CORRIGIDA PARA IPI DE CAPOTA MARÍTIMA
 def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
+    IPI_RATE_DEFAULT = 0.0975 # 9.75%
+    
     if not itens:
-        return 0.0, 0.0, 0.0, 0.0
+        # Retorna a alíquota padrão se não houver itens
+        return 0.0, 0.0, 0.0, 0.0, IPI_RATE_DEFAULT
+
     m_total = sum(item['comprimento'] * item['quantidade'] for item in itens)
     
     def preco_item_of(item):
@@ -198,13 +203,21 @@ def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
     valor_bruto = sum((item['comprimento'] * item['quantidade']) * preco_item_of(item) for item in itens)
 
     if tipo_pedido == "Industrialização":
-        valor_ipi = 0
-        valor_final = valor_bruto
+        return m_total, valor_bruto, 0.0, valor_bruto, 0.0 # Retorna 0.0 como taxa de IPI
     else:
-        valor_ipi = valor_bruto * 0.0975
+        IPI_RATE_CAPOTA = 0.0325 # 3.25%
+        
+        # Verifica se algum item é "Capota Marítima"
+        has_capota_maritima = any(item.get('produto') == "Capota Marítima" for item in itens)
+        
+        # Define a alíquota a ser usada
+        ipi_rate_to_use = IPI_RATE_CAPOTA if has_capota_maritima else IPI_RATE_DEFAULT
+        
+        valor_ipi = valor_bruto * ipi_rate_to_use
         valor_final = valor_bruto + valor_ipi
 
-    return m_total, valor_bruto, valor_ipi, valor_final
+        # Novo: Retorna a taxa de IPI utilizada para exibição
+        return m_total, valor_bruto, valor_ipi, valor_final, ipi_rate_to_use
 
 # ============================
 # Função para gerar PDF
@@ -298,7 +311,8 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
             pdf.ln(1)
 
         if resumo_bob:
-            m_total, valor_bruto, valor_ipi, valor_final = resumo_bob
+            # NOVO: Recebe 5 valores (incluindo a taxa de IPI)
+            m_total, valor_bruto, valor_ipi, valor_final, ipi_rate = resumo_bob 
             pdf.ln(3)
             pdf.set_font("Arial", "B", 11)
             pdf.cell(0, 10, "Resumo - Bobinas", ln=True)
@@ -306,7 +320,9 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
             pdf.cell(0, 8, f"Total de Metros Lineares: {str(f'{m_total:.2f}'.replace('.', ','))} m", ln=True)
             pdf.cell(0, 8, f"Valor Bruto: {_format_brl(valor_bruto)}", ln=True)
             if valor_ipi>0:
-                pdf.cell(0, 8, f"IPI: {_format_brl(valor_ipi)}", ln=True)
+                ipi_percent = ipi_rate * 100
+                # NOVO: Exibe a alíquota correta
+                pdf.cell(0, 8, f"IPI ({ipi_percent:.2f}%): {_format_brl(valor_ipi)}", ln=True)
             pdf.set_font("Arial", "B", 10)
             pdf.cell(0, 8, f"Valor Total: {_format_brl(valor_final)}", ln=True)
         pdf.ln(10)
@@ -335,7 +351,7 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
     return pdf_bytes
 
 # ============================
-# Funções de Reset (CORRIGIDAS)
+# Funções de Reset
 # ============================
 
 def reset_novo_orcamento_state():
@@ -369,14 +385,14 @@ def reset_novo_orcamento_state():
     st.session_state["itens_confeccionados"] = []
     st.session_state["bobinas_adicionadas"] = []
     
-    # st.rerun() REMOVIDO: O Streamlit faz o rerun automaticamente após a função on_click.
 
 def reset_historico_filters():
     """Reseta todos os filtros do Histórico de Orçamentos."""
     st.session_state["filtro_cliente"] = "Todos"
     st.session_state["filtro_cnpj"] = "Todos"
     st.session_state["filtro_id"] = ""
-    # st.rerun() REMOVIDO: O Streamlit faz o rerun automaticamente após a função on_click.
+    # Não resetamos o 'filtro_datas' diretamente, pois ele se reajustará ao intervalo padrão de todos os orçamentos após o rerun.
+
 
 # ============================
 # Inicialização
@@ -391,9 +407,9 @@ defaults = {
     "bobinas_adicionadas": [], "frete_sel": "CIF", "obs": "",
     "vend_nome": "", "vend_tel": "", "vend_email": "",
     "menu_index": 0,
-    "filtro_cliente": "Todos", 
-    "filtro_cnpj": "Todos",   
-    "filtro_id": "",          
+    "filtro_cliente": "Todos", # Adicionado para filtro
+    "filtro_cnpj": "Todos",   # Adicionado para filtro
+    "filtro_id": "",          # Adicionado para filtro
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -444,7 +460,7 @@ st_por_estado.update({
 # Interface - Novo Orçamento
 # ============================
 if menu == "Novo Orçamento":
-    # Botão de Limpar Formulário
+    # Botão de Limpar Formulário (Novo)
     st.button("🧹 Limpar Formulário", on_click=reset_novo_orcamento_state, key="clear_novo_orc_form")
     st.markdown("---")
     
@@ -616,16 +632,20 @@ if menu == "Novo Orçamento":
                         st.session_state['bobinas_adicionadas'].pop(idx)
                         st.rerun()
 
-            m_total, valor_bruto_bob, valor_ipi_bob, valor_final_bob = calcular_valores_bobinas(
+            # NOVO: Recebe a taxa de IPI utilizada
+            m_total, valor_bruto_bob, valor_ipi_bob, valor_final_bob, ipi_rate_bob = calcular_valores_bobinas(
                 st.session_state['bobinas_adicionadas'], preco_m2, tipo_pedido
             )
+            ipi_percent = ipi_rate_bob * 100 # Converte para porcentagem para exibição
+            
             st.markdown("---")
             st.success("💰 **Resumo do Pedido - Bobinas**")
             st.write(f"📏 Total de Metros Lineares: **{m_total:.2f} m**".replace(".", ","))
             st.write(f"💵 Valor Bruto: **{_format_brl(valor_bruto_bob)}**")
             if tipo_pedido != "Industrialização":
-                st.write(f"🧾 IPI (9.75%): **{_format_brl(valor_ipi_bob)}**")
-                st.write(f"💰 Valor Final com IPI (9.75%): **{_format_brl(valor_final_bob)}**")
+                # NOVO: Exibe a alíquota correta
+                st.write(f"🧾 IPI ({ipi_percent:.2f}%): **{_format_brl(valor_ipi_bob)}**")
+                st.write(f"💰 Valor Final com IPI ({ipi_percent:.2f}%): **{_format_brl(valor_final_bob)}**")
             else:
                 st.write(f"💰 Valor Final: **{_format_brl(valor_final_bob)}**")
 
@@ -678,6 +698,7 @@ if menu == "Novo Orçamento":
 
         # Resumos
         resumo_conf = calcular_valores_confeccionados(st.session_state["itens_confeccionados"], st.session_state.get("preco_m2",0.0), st.session_state.get("tipo_cliente"," "), st.session_state.get("estado",""), st.session_state.get("tipo_pedido","Direta")) if st.session_state["itens_confeccionados"] else None
+        # NOVO: Chamada retorna 5 valores
         resumo_bob = calcular_valores_bobinas(st.session_state["bobinas_adicionadas"], st.session_state.get("preco_m2",0.0), st.session_state.get("tipo_pedido","Direta")) if st.session_state["bobinas_adicionadas"] else None
 
         # Gerar PDF bytes (Passando orcamento_id)
@@ -725,15 +746,18 @@ if menu == "Histórico de Orçamentos":
         clientes = sorted(list({o[2] for o in orcamentos if o[2]}))
         cnpjs = sorted(list({o[3] for o in orcamentos if o[3]}))
         
-        # Filtro por ID
+        # Filtro por ID (Novo)
         orc_id_filtro = st.text_input("Filtrar por ID do Orçamento:", value=st.session_state.get("filtro_id", ""), key="filtro_id")
 
-        # Filtros de Seleção
+        # Filtros de Seleção (mantendo state)
         cliente_filtro = st.selectbox("Filtrar por cliente:", ["Todos"] + clientes, key="filtro_cliente")
         cnpj_filtro = st.selectbox("Filtrar por CNPJ:", ["Todos"] + cnpjs, key="filtro_cnpj")
         
-        # Botão Limpar Filtros
-        st.button("🧹 Limpar Filtros", on_click=reset_historico_filters, key="clear_historico_filters")
+        # Botão Limpar Filtros (Novo)
+        # O Streamlit lida com o rerun automaticamente após a alteração do state
+        if st.button("🧹 Limpar Filtros", key="clear_historico_filters"):
+            reset_historico_filters()
+            st.rerun() # Precisa de rerun explícito pois a função reset_historico_filters não faz
 
         datas = [datetime.strptime(o[1], "%d/%m/%Y %H:%M") for o in orcamentos]
         min_data = min(datas) if datas else datetime.now(pytz.timezone("America/Sao_Paulo"))
@@ -756,6 +780,7 @@ if menu == "Histórico de Orçamentos":
             # Lógica de Filtragem
             id_ok = True
             if orc_id_filtro:
+                # Permite pesquisa por prefixo do ID (string)
                 if not str(orc_id).startswith(orc_id_filtro):
                     id_ok = False
 
@@ -788,9 +813,10 @@ if menu == "Histórico de Orçamentos":
                         itens_conf_calc, preco_m2_base, orc_data['tipo_cliente'], orc_data['estado'], orc_data['tipo_pedido']
                     ) if itens_conf_calc else (0, 0, 0, 0, 0, 0) 
                     
+                    # NOVO: Chamada retorna 5 valores (incluindo IPI rate)
                     resumo_bob = calcular_valores_bobinas(
                         itens_bob_calc, preco_m2_base, orc_data['tipo_pedido']
-                    ) if itens_bob_calc else (0, 0, 0, 0)
+                    ) if itens_bob_calc else (0, 0, 0, 0, 0.0975) # Valor default se vazio
                     
                     valor_final_total = resumo_conf[3] + resumo_bob[3]
                     
@@ -884,6 +910,12 @@ if menu == "Histórico de Orçamentos":
 
                     with col2:
                         # Baixar PDF 
+                        itens_bob_calc = [dict(zip(['produto','comprimento','largura','quantidade','cor','espessura','preco_unitario'], b)) for b in bob]
+                        # NOVO: Chamada retorna 5 valores
+                        resumo_bob_calc = calcular_valores_bobinas(
+                            itens_bob_calc, preco_m2_base, orc_data['tipo_pedido']
+                        ) if itens_bob_calc else (0, 0, 0, 0, 0.0975)
+                        
                         pdf_bytes = gerar_pdf(
                             orc_id, 
                             cliente={
@@ -900,9 +932,9 @@ if menu == "Histórico de Orçamentos":
                                 "email": orc[10]
                             },
                             itens_confeccionados=[dict(zip(['produto','comprimento','largura','quantidade','cor'],c)) for c in confecc],
-                            itens_bobinas=[dict(zip(['produto','comprimento','largura','quantidade','cor','espessura','preco_unitario'],b)) for b in bob],
+                            itens_bobinas=itens_bob_calc,
                             resumo_conf=None, 
-                            resumo_bob=None,  
+                            resumo_bob=resumo_bob_calc, # Passa o resumo de 5 itens
                             observacao=orc[11],
                             preco_m2=orc_data.get('preco_m2_base') if orc_data.get('preco_m2_base') is not None else 0.0
                         ) 
