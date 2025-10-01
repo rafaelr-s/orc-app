@@ -763,7 +763,7 @@ if menu == "Histórico de Orçamentos":
                     st.markdown(f"**CNPJ:** {cliente_cnpj}")
                     st.markdown(f"**Vendedor:** {vendedor_nome}")
                     preco_m2_base_display = orc_data.get('preco_m2_base') if orc_data.get('preco_m2_base') is not None else 0.0
-                    st.markdown(f"**Preço Base Utilizado (R$):** {_format_brl(preco_m2_base_display)}")
+                    st.markdown(f"**Preço Base Utilizado (💵):** {_format_brl(preco_m2_base_display)}")
 
                     if confecc:
                         st.markdown("### ⬛ Itens Confeccionados")
