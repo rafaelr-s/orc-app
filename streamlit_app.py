@@ -604,14 +604,14 @@ if menu == "Novo Orçamento":
         st.success(f"✅ PDF salvo em disco: {pdf_path}")
 
         # Download button (único key por orçamento)
-        download_key = f"download_generated_{orcamento_id}_{int(datetime.now().timestamp())}"
-            st.download_button(
-             "⬇️ Baixar PDF",
-                data=pdf_bytes,
-            file_name=pdf_path,
-            mime="application/pdf",
-            key=f"download_key_{orcamento_id}"
-        )
+download_key = f"download_generated_{orcamento_id}_{int(datetime.now().timestamp())}"
+st.download_button(
+    "⬇️ Baixar PDF",
+    data=pdf_bytes,
+    file_name=pdf_path,
+    mime="application/pdf",
+    key=f"download_key_{orcamento_id}"
+    )
 
 # ============================
 # Página de Histórico com Filtros
