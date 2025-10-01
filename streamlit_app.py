@@ -10,11 +10,12 @@ from io import BytesIO
 # ============================
 # Banco SQLite
 # ============================
-DB_NAME = "orcamentos.db" # Adicionado para consistência
+DB_NAME = "orcamentos.db" 
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
+    # Tabela orcamentos atualizada com preco_m2_base REAL
     cur.execute("""
         CREATE TABLE IF NOT EXISTS orcamentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,7 +29,8 @@ def init_db():
             vendedor_nome TEXT,
             vendedor_tel TEXT,
             vendedor_email TEXT,
-            observacao TEXT
+            observacao TEXT,
+            preco_m2_base REAL
         )
     """)
     cur.execute("""
@@ -60,13 +62,14 @@ def init_db():
     conn.commit()
     conn.close()
 
-def salvar_orcamento(cliente, vendedor, itens_confeccionados, itens_bobinas, observacao):
+# Função atualizada para salvar preco_m2_base
+def salvar_orcamento(cliente, vendedor, itens_confeccionados, itens_bobinas, observacao, preco_m2_base):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
 
     cur.execute("""
-        INSERT INTO orcamentos (data_hora, cliente_nome, cliente_cnpj, tipo_cliente, estado, frete, tipo_pedido, vendedor_nome, vendedor_tel, vendedor_email, observacao)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO orcamentos (data_hora, cliente_nome, cliente_cnpj, tipo_cliente, estado, frete, tipo_pedido, vendedor_nome, vendedor_tel, vendedor_email, observacao, preco_m2_base)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         datetime.now(pytz.timezone("America/Sao_Paulo")).strftime("%d/%m/%Y %H:%M"),
         cliente.get("nome",""),
@@ -78,7 +81,8 @@ def salvar_orcamento(cliente, vendedor, itens_confeccionados, itens_bobinas, obs
         vendedor.get("nome",""),
         vendedor.get("tel",""),
         vendedor.get("email",""),
-        observacao
+        observacao,
+        preco_m2_base # NOVO CAMPO
     ))
     orcamento_id = cur.lastrowid
 
@@ -101,7 +105,7 @@ def salvar_orcamento(cliente, vendedor, itens_confeccionados, itens_bobinas, obs
 def buscar_orcamentos():
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
-    cur.execute("SELECT id, data_hora, cliente_nome, cliente_cnpj, vendedor_nome FROM orcamentos ORDER BY id DESC") # Adicionei cliente_cnpj para uso no histórico, apesar de não ser estritamente necessário para esta função
+    cur.execute("SELECT id, data_hora, cliente_nome, cliente_cnpj, vendedor_nome FROM orcamentos ORDER BY id DESC") 
     rows = cur.fetchall()
     conn.close()
     return rows
@@ -109,6 +113,7 @@ def buscar_orcamentos():
 def carregar_orcamento_por_id(orcamento_id):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
+    # SELECT * agora retorna 13 colunas (0 a 12)
     cur.execute("SELECT * FROM orcamentos WHERE id=?", (orcamento_id,))
     orc = cur.fetchone()
     cur.execute("SELECT produto, comprimento, largura, quantidade, cor FROM itens_confeccionados WHERE orcamento_id=?", (orcamento_id,))
@@ -128,9 +133,9 @@ def _format_brl(v):
         return f"R$ {v}"
 
 # ============================
-# Cálculos (pequenas proteções)
+# Cálculos
 # ============================
-st_por_estado = {}  # declarado cedo, depois definido mais abaixo
+st_por_estado = {}  
 
 def calcular_valores_confeccionados(itens, preco_m2, tipo_cliente="", estado="", tipo_pedido="Direta"):
     if not itens:
@@ -144,7 +149,6 @@ def calcular_valores_confeccionados(itens, preco_m2, tipo_cliente="", estado="",
         aliquota_st = 0
         valor_final = valor_bruto
     else:
-        # Nova lógica de cálculo de IPI por item (para lidar com importados)
         IPI_CONFECCIONADO_DEFAULT = 0.0325
         # Produtos isentos de IPI
         IPI_ZERO_PRODS = ["Acrylic", "Agora"]
@@ -158,7 +162,6 @@ def calcular_valores_confeccionados(itens, preco_m2, tipo_cliente="", estado="",
             ipi_rate = IPI_CONFECCIONADO_DEFAULT
 
             # 1. Verificar isenção para produtos importados (Acrylic, Agora, Tela de Sombreamento)
-            # O produto 'Capota Marítima' (e outros) que não estiver aqui, usará a taxa padrão de 3.25%
             if produto in IPI_ZERO_PRODS or any(produto.startswith(prefix) for prefix in IPI_ZERO_PREFIXES):
                 ipi_rate = 0.0
             
@@ -179,13 +182,10 @@ def calcular_valores_confeccionados(itens, preco_m2, tipo_cliente="", estado="",
 def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
     if not itens:
         return 0.0, 0.0, 0.0, 0.0
-    # m_total: soma dos metros (comprimento * quantidade)
     m_total = sum(item['comprimento'] * item['quantidade'] for item in itens)
-    # valor bruto: usar preco_unitario se NÃO for None, senão usar preco_m2
+    
     def preco_item_of(item):
-        pu = item.get('preco_unitario')  # pode ser None
-        # O preço unitário só é definido para bobinas com prefixos de espessura (para diferenciar do preco_m2 global)
-        # Se for um item de bobina comum, usa o preco_m2.
+        pu = item.get('preco_unitario') 
         return pu if (pu is not None) else preco_m2 
 
     valor_bruto = sum((item['comprimento'] * item['quantidade']) * preco_item_of(item) for item in itens)
@@ -194,7 +194,7 @@ def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
         valor_ipi = 0
         valor_final = valor_bruto
     else:
-        # A alíquota IPI para Bobinas está em 9.75% no código original
+        # A alíquota IPI para Bobinas está em 9.75%
         valor_ipi = valor_bruto * 0.0975
         valor_final = valor_bruto + valor_ipi
 
@@ -329,19 +329,12 @@ init_db()
 
 # session state defaults for form fields (so reabrir can populate)
 defaults = {
-    "Cliente_nome": "",
-    "Cliente_CNPJ": "",
-    "tipo_cliente": " ",
-    "estado": list(icms_por_estado.keys())[0] if 'icms_por_estado' in locals() else "SP", # Garantir um default
-    "tipo_pedido": "Direta",
-    "preco_m2": 0.0,
-    "itens_confeccionados": [],
-    "bobinas_adicionadas": [],
-    "frete_sel": "CIF",
-    "obs": "",
-    "vend_nome": "",
-    "vend_tel": "",
-    "vend_email": ""
+    "Cliente_nome": "", "Cliente_CNPJ": "", "tipo_cliente": " ",
+    "estado": "SP", # Default é SP, será populado mais abaixo
+    "tipo_pedido": "Direta", "preco_m2": 0.0, "itens_confeccionados": [],
+    "bobinas_adicionadas": [], "frete_sel": "CIF", "obs": "",
+    "vend_nome": "", "vend_tel": "", "vend_email": "",
+    "menu_index": 0 # NOVO: Para controlar o estado do menu
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -354,7 +347,10 @@ st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", 
 st.title("Orçamento - Grupo Locomotiva")
 
 # --- Menu ---
-menu = st.sidebar.selectbox("Menu", ["Novo Orçamento","Histórico de Orçamentos"], index=0)
+menu = st.sidebar.selectbox("Menu", ["Novo Orçamento","Histórico de Orçamentos"], index=st.session_state['menu_index'])
+# Reseta o menu_index para 0 (Novo Orçamento) após a leitura
+if st.session_state['menu_index'] != 0 and menu == "Novo Orçamento":
+    st.session_state['menu_index'] = 0
 
 # ============================
 # Tabelas de ICMS e ST
@@ -369,6 +365,8 @@ todos_estados = [
 for uf in todos_estados:
     if uf not in icms_por_estado:
         icms_por_estado[uf] = 7
+if st.session_state.get("estado") not in icms_por_estado:
+     st.session_state["estado"] = "SP" # Garante um valor inicial válido
 
 st_por_estado.update({ # Usar update pois st_por_estado foi declarado globalmente
     "SP": 14, "RJ": 27, "MG": 22, "ES": 0, "PR": 22, "RS": 20, "SC": 0,
@@ -422,8 +420,10 @@ if menu == "Novo Orçamento":
     # Seleção de Produto (interface para adicionar)
     st.markdown("---")
     st.subheader("➕ Adicionar Produto")
-    produto = st.selectbox("Nome do Produto:", options=produtos_lista, key="produto_sel")
+    # Preenchimento do produto selecionado ao reabrir
+    produto = st.selectbox("Nome do Produto:", options=produtos_lista, index=produtos_lista.index(st.session_state.get("produto_sel")) if st.session_state.get("produto_sel") in produtos_lista else 0, key="produto_sel")
     tipo_produto = st.radio("Tipo do Produto:", ["Confeccionado", "Bobina"], key="tipo_prod_sel")
+    # Preenchimento do preco_m2 ao reabrir
     preco_m2 = st.number_input("Preço por m² ou metro linear (R$):", min_value=0.0, value=st.session_state.get("preco_m2",0.0), step=0.01, key="preco_m2")
 
     # ICMS automático
@@ -437,6 +437,7 @@ if menu == "Novo Orçamento":
 
     # Confeccionado
     if tipo_produto == "Confeccionado":
+        # ... (código para adicionar confeccionados)
         st.subheader("➕ Adicionar Item Confeccionado")
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -468,9 +469,6 @@ if menu == "Novo Orçamento":
                         f"= {area_item:.2f} m² → {_format_brl(valor_item)}"
                     )
                 with col2:
-                    # Este campo 'cor' não tem um `key` único para cada item na iteração, 
-                    # mas o Streamlit deve conseguir lidar com a chave única gerada pelo f-string. 
-                    # Mantenho como está por ser o padrão de design do código original.
                     cor = st.text_input("Cor:", value=item['cor'], key=f"cor_conf_{idx}")
                     st.session_state['itens_confeccionados'][idx]['cor'] = cor
                 with col4:
@@ -491,7 +489,6 @@ if menu == "Novo Orçamento":
             st.write(f"📏 Área Total: **{m2_total:.2f} m²**".replace(".", ","))
             st.write(f"💵 Valor Bruto: **{_format_brl(valor_bruto)}**")
             if tipo_pedido != "Industrialização":
-                # O cálculo de IPI agora reflete as regras específicas
                 st.write(f"🧾 IPI: **{_format_brl(valor_ipi)}**") 
                 if valor_st > 0:
                     st.write(f"⚖️ ST ({aliquota_st}%): **{_format_brl(valor_st)}**")
@@ -501,6 +498,7 @@ if menu == "Novo Orçamento":
 
     # Bobina
     if tipo_produto == "Bobina":
+        # ... (código para adicionar bobinas)
         st.subheader("➕ Adicionar Bobina")
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -544,9 +542,6 @@ if menu == "Novo Orçamento":
                     st.markdown(f"**{item['produto']}**")
                     st.markdown(detalhes)
                 with col2:
-                    # Este campo 'cor' não tem um `key` único para cada item na iteração, 
-                    # mas o Streamlit deve conseguir lidar com a chave única gerada pelo f-string.
-                    # Mantenho como está por ser o padrão de design do código original.
                     cor = st.text_input("Cor:", value=item['cor'], key=f"cor_bob_{idx}")
                     st.session_state['bobinas_adicionadas'][idx]['cor'] = cor
                 with col4:
@@ -610,7 +605,8 @@ if menu == "Novo Orçamento":
             vendedor,
             st.session_state["itens_confeccionados"],
             st.session_state["bobinas_adicionadas"],
-            st.session_state.get("obs","")
+            st.session_state.get("obs",""),
+            st.session_state.get("preco_m2",0.0) # NOVO: Passando o preco_m2
         )
         st.success(f"✅ Orçamento salvo com ID {orcamento_id}")
 
@@ -656,56 +652,83 @@ if menu == "Novo Orçamento":
 # Menu: Histórico de Orçamentos
 # ============================
 if menu == "Histórico de Orçamentos":
-    st.subheader("📁 Histórico de Orçamentos Salvos")
+    st.subheader("📋 Histórico de Orçamentos Salvos")
     orcamentos = buscar_orcamentos()
     if not orcamentos:
         st.info("Nenhum orçamento encontrado.")
     else:
-        # A função buscar_orcamentos foi ajustada para retornar cliente_cnpj (índice 3)
         clientes = sorted(list({o[2] for o in orcamentos if o[2]}))
         cnpjs = sorted(list({o[3] for o in orcamentos if o[3]}))
         cliente_filtro = st.selectbox("Filtrar por cliente:", ["Todos"] + clientes, key="filtro_cliente")
         cnpj_filtro = st.selectbox("Filtrar por CNPJ:", ["Todos"] + cnpjs, key="filtro_cnpj")
+        
         datas = [datetime.strptime(o[1], "%d/%m/%Y %H:%M") for o in orcamentos]
-        min_data, max_data = min(datas), max(datas)
+        min_data = min(datas)
+        max_budget_date = max(datas).date()
+        
+        # Max boundary for the picker: Today's date (Solução para o filtro "bloqueado")
+        max_possible_date = datetime.now(pytz.timezone("America/Sao_Paulo")).date()
+
         data_inicio, data_fim = st.date_input(
             "Filtrar por intervalo de datas:",
-            (min_data.date(), max_data.date()),
+            (min_data.date(), max_budget_date), # Default: do primeiro ao último orçamento
             min_value=min_data.date(),
-            max_value=max_data.date(),
+            max_value=max_possible_date, # Máximo permitido é hoje
             key="filtro_datas"
         )
+        
         orcamentos_filtrados = []
         for o in orcamentos:
-            # o tem 5 itens: id, data_hora, cliente_nome, cliente_cnpj, vendedor_nome
             orc_id, data_hora, cliente_nome, cliente_cnpj, vendedor_nome = o
             data_obj = datetime.strptime(data_hora, "%d/%m/%Y %H:%M")
             cliente_ok = (cliente_filtro == "Todos" or cliente_nome == cliente_filtro)
             cnpj_ok = (cnpj_filtro == "Todos" or cliente_cnpj == cnpj_filtro)
-            data_ok = (data_inicio <= data_obj.date() <= data_fim)
+            # A data precisa ser menor ou igual a data_fim e maior ou igual a data_inicio (somente a parte da data)
+            data_ok = (data_inicio <= data_obj.date() <= data_fim) 
             if cliente_ok and cnpj_ok and data_ok:
                 orcamentos_filtrados.append(o)
 
         if not orcamentos_filtrados:
             st.warning("Nenhum orçamento encontrado com os filtros selecionados.")
         else:
-            # Exportar Excel
+            # Exportar Excel (ATUALIZADO com Preço e Valor Final Total)
             if st.button("📊 Exportar Excel do Histórico Filtrado"):
                 linhas_excel = []
+                # Mapeamento com 13 colunas (incluindo preco_m2_base)
+                orc_cols = ['id','data_hora','cliente_nome','cliente_cnpj','tipo_cliente','estado','frete','tipo_pedido','vendedor_nome','vendedor_tel','vendedor_email','observacao', 'preco_m2_base']
+
                 for o in orcamentos_filtrados:
                     orc_id, data_hora, cliente_nome, cliente_cnpj, vendedor_nome = o
                     orc, confecc, bob = carregar_orcamento_por_id(orc_id)
                     
-                    # Garantir que orc tenha pelo menos 12 elementos (colunas da tabela orcamentos)
-                    orc_data = dict(zip(['id','data_hora','cliente_nome','cliente_cnpj','tipo_cliente','estado','frete','tipo_pedido','vendedor_nome','vendedor_tel','vendedor_email','observacao'], orc))
+                    orc_data = dict(zip(orc_cols, orc))
+                    preco_m2_base = orc_data.get('preco_m2_base', 0.0)
 
+                    # 1. Recalcula os Totais (para o relatório Excel)
+                    # Converte de tupla do banco de dados para lista de dicionários para cálculo
+                    itens_conf_calc = [dict(zip(['produto','comprimento','largura','quantidade','cor'], c)) for c in confecc]
+                    itens_bob_calc = [dict(zip(['produto','comprimento','largura','quantidade','cor','espessura','preco_unitario'], b)) for b in bob]
+
+                    resumo_conf = calcular_valores_confeccionados(
+                        itens_conf_calc, preco_m2_base, orc_data['tipo_cliente'], orc_data['estado'], orc_data['tipo_pedido']
+                    ) if itens_conf_calc else (0, 0, 0, 0, 0, 0) # m2, bruto, ipi, final, st, st_aliquota
+                    
+                    resumo_bob = calcular_valores_bobinas(
+                        itens_bob_calc, preco_m2_base, orc_data['tipo_pedido']
+                    ) if itens_bob_calc else (0, 0, 0, 0) # m_total, bruto, ipi, final
+                    
+                    valor_final_total = resumo_conf[3] + resumo_bob[3]
+                    
+                    # 2. Adiciona dados na linha do Excel (item a item)
                     for c in confecc:
                         # c: produto, comprimento, largura, quantidade, cor
                         linhas_excel.append({
                             "ID": orc_id, "Data": data_hora, "Cliente": cliente_nome, "CNPJ": cliente_cnpj,
                             "Tipo Cliente": orc_data['tipo_cliente'], "Estado": orc_data['estado'], "Frete": orc_data['frete'], "Tipo Pedido": orc_data['tipo_pedido'],
                             "Vendedor": vendedor_nome, "Produto": c[0], "Comprimento": c[1], "Largura": c[2],
-                            "Quantidade": c[3], "Cor": c[4], "Tipo Item": "Confeccionado"
+                            "Quantidade": c[3], "Cor": c[4], "Tipo Item": "Confeccionado",
+                            "Preço Base Utilizado (R$)": preco_m2_base, # NOVO: Preço Base
+                            "Valor Final Total (R$)": valor_final_total # NOVO: Valor Final
                         })
                     for b in bob:
                         # b: produto, comprimento, largura, quantidade, cor, espessura, preco_unitario
@@ -714,7 +737,9 @@ if menu == "Histórico de Orçamentos":
                             "Tipo Cliente": orc_data['tipo_cliente'], "Estado": orc_data['estado'], "Frete": orc_data['frete'], "Tipo Pedido": orc_data['tipo_pedido'],
                             "Vendedor": vendedor_nome, "Produto": b[0], "Comprimento": b[1], "Largura": b[2],
                             "Quantidade": b[3], "Cor": b[4], "Espessura": b[5], "Preço Unitário": b[6],
-                            "Tipo Item": "Bobina"
+                            "Tipo Item": "Bobina",
+                            "Preço Base Utilizado (R$)": preco_m2_base, # NOVO: Preço Base
+                            "Valor Final Total (R$)": valor_final_total # NOVO: Valor Final
                         })
                 df_excel = pd.DataFrame(linhas_excel)
                 excel_bytes = BytesIO()
@@ -730,51 +755,63 @@ if menu == "Histórico de Orçamentos":
             for o in orcamentos_filtrados:
                 orc_id, data_hora, cliente_nome, cliente_cnpj, vendedor_nome = o
                 orc, confecc, bob = carregar_orcamento_por_id(orc_id)
-                # O índice do vendedor_nome em 'o' é 4, mas o orc (fetchone da tabela orcamentos) tem 12 colunas (0 a 11)
-                # orc: (id, data_hora, cliente_nome, cliente_cnpj, tipo_cliente, estado, frete, tipo_pedido, vendedor_nome, vendedor_tel, vendedor_email, observacao)
+                
+                # orc: 13 colunas (0-12)
+                orc_cols = ['id','data_hora','cliente_nome','cliente_cnpj','tipo_cliente','estado','frete','tipo_pedido','vendedor_nome','vendedor_tel','vendedor_email','observacao', 'preco_m2_base']
+                orc_data = dict(zip(orc_cols, orc))
+
                 with st.expander(f"📝 ID {orc_id} - {cliente_nome} ({data_hora})"):
                     st.markdown(f"**Cliente:** {cliente_nome}")
                     st.markdown(f"**CNPJ:** {cliente_cnpj}")
                     st.markdown(f"**Vendedor:** {vendedor_nome}")
+                    st.markdown(f"**Preço Base Utilizado (R$):** {_format_brl(orc_data.get('preco_m2_base', 0.0))}")
 
                     if confecc:
                         st.markdown("### ⬛ Itens Confeccionados")
                         for c in confecc:
-                            # c: produto, comprimento, largura, quantidade, cor
                             st.markdown(f"- **{c[0]}**: {c[3]}x {c[1]:.2f}m x {c[2]:.2f}m | Cor: {c[4]}")
 
                     if bob:
                         st.markdown("### 🔘 Itens Bobinas")
                         for b in bob:
-                            # b: produto, comprimento, largura, quantidade, cor, espessura, preco_unitario
                             esp = f" | Esp: {b[5]:.2f}mm" if b[5] is not None else ""
                             st.markdown(f"- **{b[0]}**: {b[3]}x {b[1]:.2f}m | Largura: {b[2]:.2f}m{esp} | Cor: {b[4]}")
 
                     col1, col2, col3 = st.columns([1,1,1])
                     with col1:
+                        # Reabrir (ATUALIZADO com auto-switch, produto e preco_m2)
                         if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
-                            # orc[4] a orc[11] são: tipo_cliente, estado, frete, tipo_pedido, vendedor_nome, vendedor_tel, vendedor_email, observacao
-                            # orc[2] e orc[3] são: cliente_nome, cliente_cnpj
+                            
+                            preco_m2_base = orc_data.get('preco_m2_base', 0.0)
+                            
+                            # Determina o produto a ser pré-selecionado
+                            primeiro_produto = None
+                            if confecc:
+                                primeiro_produto = confecc[0][0] 
+                            elif bob:
+                                primeiro_produto = bob[0][0]
+                                
                             st.session_state.update({
                                 "Cliente_nome": orc[2] or "",
                                 "Cliente_CNPJ": orc[3] or "",
                                 "tipo_cliente": orc[4] or " ",
-                                "estado": orc[5] or list(icms_por_estado.keys())[0], # Adicionado default
+                                "estado": orc[5] or list(icms_por_estado.keys())[0], 
                                 "frete_sel": orc[6] or "CIF",
                                 "tipo_pedido": orc[7] or "Direta",
                                 "vend_nome": orc[8] or "",
                                 "vend_tel": orc[9] or "",
                                 "vend_email": orc[10] or "",
                                 "obs": orc[11] or "",
+                                "preco_m2": preco_m2_base, # NOVO: Preço base
+                                "produto_sel": primeiro_produto if primeiro_produto else " ", # NOVO: Produto
                                 "itens_confeccionados": [dict(zip(['produto','comprimento','largura','quantidade','cor'],c)) for c in confecc],
-                                "bobinas_adicionadas": [dict(zip(['produto','comprimento','largura','quantidade','cor','espessura','preco_unitario'],b)) for b in bob]
+                                "bobinas_adicionadas": [dict(zip(['produto','comprimento','largura','quantidade','cor','espessura','preco_unitario'],b)) for b in bob],
+                                "menu_index": 0 # NOVO: Mudar para "Novo Orçamento"
                             })
                             st.success(f"Orçamento ID {orc_id} carregado no formulário.")
-                            # Adicionado st.rerun() para garantir a atualização imediata da interface no menu "Novo Orçamento"
                             st.rerun()
 
                     with col2:
-                        # Esta lógica para gerar PDF dentro do loop está correta
                         pdf_bytes = gerar_pdf(
                             cliente={
                                 "nome": orc[2],
@@ -791,10 +828,10 @@ if menu == "Histórico de Orçamentos":
                             },
                             itens_confeccionados=[dict(zip(['produto','comprimento','largura','quantidade','cor'],c)) for c in confecc],
                             itens_bobinas=[dict(zip(['produto','comprimento','largura','quantidade','cor','espessura','preco_unitario'],b)) for b in bob],
-                            resumo_conf=None, # Nao é usado pelo gerar_pdf quando chamado sem os calculos
-                            resumo_bob=None,  # Nao é usado pelo gerar_pdf quando chamado sem os calculos
+                            resumo_conf=None, 
+                            resumo_bob=None,  
                             observacao=orc[11],
-                            preco_m2=0.0 # Valor dummy, mas o ideal seria salvar o preço_m2 original do orçamento
+                            preco_m2=orc_data.get('preco_m2_base', 0.0) # Usa o preço base salvo
                         ) 
                         st.download_button(
                             "📄 Baixar PDF",
@@ -805,7 +842,6 @@ if menu == "Histórico de Orçamentos":
                         )
                     with col3:
                         if st.button("❌ Excluir", key=f"excluir_{orc_id}"):
-                            # CORREÇÃO DE ERRO: DB_PATH não definido, substituído por DB_NAME
                             conn = sqlite3.connect(DB_NAME) 
                             cur = conn.cursor()
                             cur.execute("DELETE FROM orcamentos WHERE id=?", (orc_id,))
