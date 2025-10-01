@@ -369,9 +369,9 @@ def reset_novo_orcamento_state():
     st.session_state["vend_nome"] = ""
     st.session_state["vend_tel"] = ""
     st.session_state["vend_email"] = ""
-    # Resetar o selectbox
+    # Resetar o selectbox (NOVO)
     if "vendedor_select" in st.session_state:
-        st.session_state["vendedor_select"] = VENDEDORES_NOMES[0]
+        st.session_state["vendedor_select"] = VENDEDORES_NOMES[0] # Set to "Selecione um Vendedor"
 
     st.session_state["preco_m2"] = 0.0
     st.session_state["menu_index"] = 0 
@@ -400,7 +400,7 @@ def reset_historico_filters():
     # O Streamlit faz o rerun automaticamente após a função on_click.
 
 # ============================
-# Constantes de Vendedores (NOVO)
+# Constantes de Vendedores (NOVO - REQ. 1)
 # ============================
 VENDEDORES = {
     "Selecione um Vendedor": {"nome": "", "tel": "", "email": ""},
@@ -409,13 +409,52 @@ VENDEDORES = {
 }
 VENDEDORES_NOMES = list(VENDEDORES.keys())
 
-# Função para atualizar o Session State baseado na seleção (NOVO)
+# Função para atualizar o Session State baseado na seleção (NOVO - REQ. 1)
 def update_vendedor_details():
     selected_name = st.session_state["vendedor_select"]
     details = VENDEDORES.get(selected_name, {"nome": selected_name, "tel": "", "email": ""})
     st.session_state["vend_nome"] = details["nome"]
     st.session_state["vend_tel"] = details["tel"]
     st.session_state["vend_email"] = details["email"]
+
+# ============================
+# Funções de Resumo para Exportação Excel (NOVO - REQ. 2)
+# ============================
+def get_order_summary_info(confecc, bob):
+    # confecc: (produto, comprimento, largura, quantidade, cor)
+    # bob: (produto, comprimento, largura, quantidade, cor, espessura, preco_unitario)
+    
+    has_conf = len(confecc) > 0
+    has_bob = len(bob) > 0
+    
+    # 1. Tipo do Item
+    if has_conf and has_bob:
+        tipo_item = "Misto (Conf. e Bobina)"
+    elif has_conf:
+        tipo_item = "Confeccionado"
+    elif has_bob:
+        tipo_item = "Bobina"
+    else:
+        tipo_item = "Nenhum"
+
+    # 2. Produto Mais Selecionado (por quantidade)
+    product_counts = {}
+    for item in confecc:
+        product = item[0] # Produto
+        quantity = item[3] # Quantidade
+        product_counts[product] = product_counts.get(product, 0) + quantity
+    
+    for item in bob:
+        product = item[0] # Produto
+        quantity = item[3] # Quantidade
+        product_counts[product] = product_counts.get(product, 0) + quantity
+
+    most_selected_product = max(product_counts, key=product_counts.get) if product_counts else ""
+        
+    # 3. Área Total em m² (Apenas Confeccionado, conforme métrica do m² solicitado)
+    m2_total_conf = sum(item[1] * item[2] * item[3] for item in confecc)
+
+    return tipo_item, most_selected_product, m2_total_conf
 
 # ============================
 # Inicialização
@@ -433,6 +472,7 @@ defaults = {
     "filtro_cliente": "Todos", 
     "filtro_cnpj": "Todos",   
     "filtro_id": "",          
+    "vendedor_select": VENDEDORES_NOMES[0] # Novo default
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -685,7 +725,7 @@ if menu == "Novo Orçamento":
     Observacao = st.text_area("Insira aqui alguma observação sobre o orçamento (opcional)", value=st.session_state.get("obs",""), key="obs")
 
     # -----------------------------------------------------
-    # NOVO: Seleção do Vendedor por Dropdown
+    # NOVO: Seleção do Vendedor por Dropdown (REQ. 1)
     # -----------------------------------------------------
     st.subheader("🗣️ Vendedor(a)")
     
@@ -719,7 +759,6 @@ if menu == "Novo Orçamento":
     # -----------------------------------------------------
     # FIM NOVO
     # -----------------------------------------------------
-
 
     # Botão gerar e salvar
     if st.button("📄 Gerar PDF e Salvar Orçamento", key="gerar_e_salvar"):
@@ -844,10 +883,10 @@ if menu == "Histórico de Orçamentos":
         if not orcamentos_filtrados:
             st.warning("Nenhum orçamento encontrado com os filtros selecionados.")
         else:
-            # Exportar Excel
+            # Exportar Excel (NOVA LÓGICA - REQ. 2)
             if st.button("📊 Exportar Excel do Histórico Filtrado"):
                 linhas_excel = []
-                # CORREÇÃO 1: Definição de orc_cols para uso no loop de exportação
+                # Colunas para carregar dados do orcamento
                 orc_cols = ['id','data_hora','cliente_nome','cliente_cnpj','tipo_cliente','estado','frete','tipo_pedido','vendedor_nome','vendedor_tel','vendedor_email','observacao', 'preco_m2_base']
 
                 for o in orcamentos_filtrados:
@@ -857,7 +896,13 @@ if menu == "Histórico de Orçamentos":
                     orc_data = dict(zip(orc_cols, orc))
                     preco_m2_base = orc_data.get('preco_m2_base') if orc_data.get('preco_m2_base') is not None else 0.0
 
+                    # 1. Obter info de resumo (Tipo de Item, Produto Mais Selecionado, Área Total Conf.)
+                    # confecc/bob são listas de tuplas (ex: (produto, comprimento, largura, quantidade, cor))
+                    tipo_item, produto_mais_sel, m2_total_conf = get_order_summary_info(confecc, bob)
+                    
+                    # 2. Calcular valores finais
                     itens_conf_calc = [dict(zip(['produto','comprimento','largura','quantidade','cor'], c)) for c in confecc]
+                    # Bobinas carregadas têm 7 campos, incluindo espessura e preco_unitario
                     itens_bob_calc = [dict(zip(['produto','comprimento','largura','quantidade','cor','espessura','preco_unitario'], b)) for b in bob]
 
                     resumo_conf = calcular_valores_confeccionados(
@@ -867,36 +912,34 @@ if menu == "Histórico de Orçamentos":
                     # Chamada retorna 5 valores (incluindo IPI rate)
                     resumo_bob = calcular_valores_bobinas(
                         itens_bob_calc, preco_m2_base, orc_data['tipo_pedido']
-                    ) if itens_bob_calc else (0, 0, 0, 0, 0.0975) # Valor default se vazio
+                    ) if itens_bob_calc else (0, 0, 0, 0, 0.0975) 
                     
                     valor_final_total = resumo_conf[3] + resumo_bob[3]
                     
-                    for c in confecc:
-                        linhas_excel.append({
-                            "ID": orc_id, "Data": data_hora, "Cliente": cliente_nome, "CNPJ": cliente_cnpj,
-                            "Tipo Cliente": orc_data['tipo_cliente'], "Estado": orc_data['estado'], "Frete": orc_data['frete'], "Tipo Pedido": orc_data['tipo_pedido'],
-                            "Vendedor": vendedor_nome, "Produto": c[0], "Comprimento": c[1], "Largura": c[2],
-                            "Quantidade": c[3], "Cor": c[4], "Tipo Item": "Confeccionado",
-                            "Preço Base Utilizado (R$)": preco_m2_base, 
-                            "Valor Final Total (R$)": valor_final_total 
-                        })
-                    for b in bob:
-                        linhas_excel.append({
-                            "ID": orc_id, "Data": data_hora, "Cliente": cliente_nome, "CNPJ": cliente_cnpj,
-                            "Tipo Cliente": orc_data['tipo_cliente'], "Estado": orc_data['estado'], "Frete": orc_data['frete'], "Tipo Pedido": orc_data['tipo_pedido'],
-                            "Vendedor": vendedor_nome, "Produto": b[0], "Comprimento": b[1], "Largura": b[2],
-                            "Quantidade": b[3], "Cor": b[4], "Espessura": b[5], "Preço Unitário": b[6],
-                            "Tipo Item": "Bobina",
-                            "Preço Base Utilizado (R$)": preco_m2_base, 
-                            "Valor Final Total (R$)": valor_final_total 
-                        })
+                    # 3. Criar uma única linha por pedido com as colunas solicitadas
+                    linhas_excel.append({
+                        "ID": orc_id, 
+                        "Nome do Cliente": cliente_nome, 
+                        "CNPJ/CPF": cliente_cnpj,
+                        "Tipo do Cliente": orc_data['tipo_cliente'], 
+                        "Estado": orc_data['estado'], 
+                        "Frete": orc_data['frete'], 
+                        "Tipo do Pedido": orc_data['tipo_pedido'],
+                        "Produto Mais Selecionado": produto_mais_sel, 
+                        "Tipo do Item": tipo_item,
+                        "Preço Base Utilizado (R$)": preco_m2_base, 
+                        "Área Total em m² (Confeccionado)": m2_total_conf, # Coluna solicitada
+                        "Final Total (R$)": valor_final_total 
+                    })
+                # Fim da nova lógica de exportação
+
                 df_excel = pd.DataFrame(linhas_excel)
                 excel_bytes = BytesIO()
                 df_excel.to_excel(excel_bytes, index=False)
                 st.download_button(
                     "⬇️ Baixar Excel",
                     data=excel_bytes.getvalue(),
-                    file_name="orcamentos_filtrados.xlsx",
+                    file_name="resumo_orcamentos.xlsx", 
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
 
@@ -939,14 +982,13 @@ if menu == "Histórico de Orçamentos":
                             elif bob:
                                 primeiro_produto = bob[0][0]
                                 
-                            # NOVO: Define o nome do vendedor para pre-selecionar no selectbox
+                            # NOVO: Define o nome do vendedor para pre-selecionar no selectbox (REQ. 1)
                             vendedor_nome_orc = orc[8] or ""
                             if vendedor_nome_orc not in VENDEDORES_NOMES:
-                                # Se o nome não estiver na lista (e.g., nome digitado manualmente antes), use o nome do orçamento
-                                st.session_state["vendedor_select"] = vendedor_nome_orc 
+                                st.session_state["vendedor_select"] = VENDEDORES_NOMES[0] # Default
                             else:
                                 st.session_state["vendedor_select"] = vendedor_nome_orc 
-
+                                
                             st.session_state.update({
                                 "Cliente_nome": orc[2] or "",
                                 "Cliente_CNPJ": orc[3] or "",
@@ -1004,14 +1046,3 @@ if menu == "Histórico de Orçamentos":
                             mime="application/pdf",
                             key=f"download_historico_{orc_id}"
                         )
-                    with col3:
-                        if st.button("❌ Excluir", key=f"excluir_{orc_id}"):
-                            conn = sqlite3.connect(DB_NAME) 
-                            cur = conn.cursor()
-                            cur.execute("DELETE FROM orcamentos WHERE id=?", (orc_id,))
-                            cur.execute("DELETE FROM itens_confeccionados WHERE orcamento_id=?", (orc_id,))
-                            cur.execute("DELETE FROM itens_bobinas WHERE orcamento_id=?", (orc_id,))
-                            conn.commit()
-                            conn.close()
-                            st.success(f"Orçamento ID {orc_id} excluído!")
-                            st.rerun()
