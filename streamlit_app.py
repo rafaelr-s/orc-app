@@ -10,10 +10,8 @@ from io import BytesIO
 # ============================
 # Banco SQLite
 # ============================
-DB_PATH = "orcamentos.db"
-
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
     cur.execute("""
         CREATE TABLE IF NOT EXISTS orcamentos (
@@ -61,8 +59,9 @@ def init_db():
     conn.close()
 
 def salvar_orcamento(cliente, vendedor, itens_confeccionados, itens_bobinas, observacao):
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
+
     cur.execute("""
         INSERT INTO orcamentos (data_hora, cliente_nome, cliente_cnpj, tipo_cliente, estado, frete, tipo_pedido, vendedor_nome, vendedor_tel, vendedor_email, observacao)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -80,30 +79,33 @@ def salvar_orcamento(cliente, vendedor, itens_confeccionados, itens_bobinas, obs
         observacao
     ))
     orcamento_id = cur.lastrowid
+
     for item in itens_confeccionados:
         cur.execute("""
             INSERT INTO itens_confeccionados (orcamento_id, produto, comprimento, largura, quantidade, cor)
             VALUES (?, ?, ?, ?, ?, ?)
         """, (orcamento_id, item['produto'], item['comprimento'], item['largura'], item['quantidade'], item.get('cor','')))
+
     for item in itens_bobinas:
         cur.execute("""
             INSERT INTO itens_bobinas (orcamento_id, produto, comprimento, largura, quantidade, cor, espessura, preco_unitario)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (orcamento_id, item['produto'], item['comprimento'], item['largura'], item['quantidade'], item.get('cor',''), item.get('espessura'), item.get('preco_unitario')))
+
     conn.commit()
     conn.close()
     return orcamento_id
 
 def buscar_orcamentos():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
-    cur.execute("SELECT id, data_hora, cliente_nome, cliente_cnpj, vendedor_nome FROM orcamentos ORDER BY id DESC")
+    cur.execute("SELECT id, data_hora, cliente_nome, vendedor_nome FROM orcamentos ORDER BY id DESC")
     rows = cur.fetchall()
     conn.close()
     return rows
 
 def carregar_orcamento_por_id(orcamento_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect("orcamentos.db")
     cur = conn.cursor()
     cur.execute("SELECT * FROM orcamentos WHERE id=?", (orcamento_id,))
     orc = cur.fetchone()
@@ -115,7 +117,7 @@ def carregar_orcamento_por_id(orcamento_id):
     return orc, confecc, bob
 
 # ============================
-# Formatação BRL
+# Formatação R$
 # ============================
 def _format_brl(v):
     try:
@@ -614,16 +616,14 @@ st.download_button(
     )
 
 # ============================
-# Página de Histórico com Filtros
+# Menu: Histórico de Orçamentos
 # ============================
 if menu == "Histórico de Orçamentos":
     st.subheader("📋 Histórico de Orçamentos Salvos")
-
     orcamentos = buscar_orcamentos()
     if not orcamentos:
         st.info("Nenhum orçamento encontrado.")
     else:
-        # Filtros
         clientes = sorted(list({o[2] for o in orcamentos if o[2]}))
         cnpjs = sorted(list({o[3] for o in orcamentos if o[3]}))
         cliente_filtro = st.selectbox("Filtrar por cliente:", ["Todos"] + clientes, key="filtro_cliente")
@@ -637,7 +637,6 @@ if menu == "Histórico de Orçamentos":
             max_value=max_data.date(),
             key="filtro_datas"
         )
-
         orcamentos_filtrados = []
         for o in orcamentos:
             orc_id, data_hora, cliente_nome, cliente_cnpj, vendedor_nome = o
@@ -651,13 +650,12 @@ if menu == "Histórico de Orçamentos":
         if not orcamentos_filtrados:
             st.warning("Nenhum orçamento encontrado com os filtros selecionados.")
         else:
-            # Botão Exportar Excel de todos filtrados
+            # Exportar Excel
             if st.button("📊 Exportar Excel do Histórico Filtrado"):
                 linhas_excel = []
                 for o in orcamentos_filtrados:
                     orc_id, data_hora, cliente_nome, cliente_cnpj, vendedor_nome = o
                     orc, confecc, bob = carregar_orcamento_por_id(orc_id)
-                    # Adiciona itens confeccionados
                     for c in confecc:
                         linhas_excel.append({
                             "ID": orc_id, "Data": data_hora, "Cliente": cliente_nome, "CNPJ": cliente_cnpj,
@@ -665,7 +663,6 @@ if menu == "Histórico de Orçamentos":
                             "Vendedor": vendedor_nome, "Produto": c[0], "Comprimento": c[1], "Largura": c[2],
                             "Quantidade": c[3], "Cor": c[4], "Tipo Item": "Confeccionado"
                         })
-                    # Adiciona itens bobina
                     for b in bob:
                         linhas_excel.append({
                             "ID": orc_id, "Data": data_hora, "Cliente": cliente_nome, "CNPJ": cliente_cnpj,
@@ -684,16 +681,14 @@ if menu == "Histórico de Orçamentos":
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
 
-            # Mostrar cada orçamento com Reabrir e Download PDF
+            # Exibir orçamentos
             for o in orcamentos_filtrados:
                 orc_id, data_hora, cliente_nome, cliente_cnpj, vendedor_nome = o
-                pdf_path = f"orcamento_{orc_id}.pdf"
+                orc, confecc, bob = carregar_orcamento_por_id(orc_id)
                 with st.expander(f"📝 ID {orc_id} - {cliente_nome} ({data_hora})"):
                     st.markdown(f"**Cliente:** {cliente_nome}")
                     st.markdown(f"**CNPJ:** {cliente_cnpj}")
                     st.markdown(f"**Vendedor:** {vendedor_nome}")
-
-                    orc, confecc, bob = carregar_orcamento_por_id(orc_id)
 
                     if confecc:
                         st.markdown("### ⬛ Itens Confeccionados")
@@ -709,41 +704,46 @@ if menu == "Histórico de Orçamentos":
                     col1, col2, col3 = st.columns([1,1,1])
                     with col1:
                         if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
-                            st.session_state["Cliente_nome"] = orc[2] or ""
-                            st.session_state["Cliente_CNPJ"] = orc[3] or ""
-                            st.session_state["tipo_cliente"] = orc[4] or " "
-                            st.session_state["estado"] = orc[5] or ""
-                            st.session_state["frete_sel"] = orc[6] or "CIF"
-                            st.session_state["tipo_pedido"] = orc[7] or "Direta"
-                            st.session_state["vend_nome"] = orc[8] or ""
-                            st.session_state["vend_tel"] = orc[9] or ""
-                            st.session_state["vend_email"] = orc[10] or ""
-                            st.session_state["obs"] = orc[11] or ""
-                            st.session_state["itens_confeccionados"] = [
-                                {"produto": c[0], "comprimento": float(c[1]), "largura": float(c[2]),
-                                 "quantidade": int(c[3]), "cor": c[4] or ""} for c in confecc
-                            ] if confecc else []
-                            st.session_state["bobinas_adicionadas"] = [
-                                {"produto": b[0], "comprimento": float(b[1]), "largura": float(b[2]),
-                                 "quantidade": int(b[3]), "cor": b[4] or "", "espessura": float(b[5]) if b[5] else None,
-                                 "preco_unitario": float(b[6]) if b[6] else None} for b in bob
-                            ] if bob else []
-                            st.session_state["menu_selected"] = "Novo Orçamento"
-                            st.success("Orçamento reaberto no formulário.")
-                            st.rerun()
+                            st.session_state.update({
+                                "Cliente_nome": orc[2] or "",
+                                "Cliente_CNPJ": orc[3] or "",
+                                "tipo_cliente": orc[4] or " ",
+                                "estado": orc[5] or "",
+                                "frete_sel": orc[6] or "CIF",
+                                "tipo_pedido": orc[7] or "Direta",
+                                "vend_nome": orc[8] or "",
+                                "vend_tel": orc[9] or "",
+                                "vend_email": orc[10] or "",
+                                "obs": orc[11] or "",
+                                "itens_confeccionados": [dict(zip(['produto','comprimento','largura','quantidade','cor'],c)) for c in confecc],
+                                "bobinas_adicionadas": [dict(zip(['produto','comprimento','largura','quantidade','cor','espessura','preco_unitario'],b)) for b in bob]
+                            })
+                            st.success(f"Orçamento ID {orc_id} carregado no formulário.")
+
                     with col2:
                         pdf_bytes = gerar_pdf(
-                            {"nome":orc[2],"cnpj":orc[3],"tipo_cliente":orc[4],"estado":orc[5],
-                             "frete":orc[6],"tipo_pedido":orc[7]},
-                            {"nome":orc[8],"tel":orc[9],"email":orc[10]},
-                            confecc, bob, orc[11]
-                        )
+                            cliente={
+                                "nome": orc[2],
+                                "cnpj": orc[3],
+                                "tipo_cliente": orc[4],
+                                "estado": orc[5],
+                                "frete": orc[6],
+                                "tipo_pedido": orc[7]
+                            },
+                            vendedor={
+                                "nome": orc[8],
+                                "tel": orc[9],
+                                "email": orc[10]
+                            },
+                            itens_confeccionados=[dict(zip(['produto','comprimento','largura','quantidade','cor'],c)) for c in confecc],
+                            itens_bobinas=[dict(zip(['produto','comprimento','largura','quantidade','cor','espessura','preco_unitario'],b)) for b in bob],
+                            observacao=orc[11]
+                        ).output(dest='S').encode('latin-1')
                         st.download_button(
-                            "⬇️ Baixar PDF",
+                            "📄 Baixar PDF",
                             data=pdf_bytes,
-                            file_name=f"Orcamento_{orc_id}.pdf",
-                            mime="application/pdf",
-                            key=f"download_hist_{orc_id}_{int(datetime.now().timestamp())}"
+                            file_name=f"orcamento_{orc_id}.pdf",
+                            mime="application/pdf"
                         )
                     with col3:
                         if st.button("❌ Excluir", key=f"excluir_{orc_id}"):
