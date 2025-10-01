@@ -606,12 +606,13 @@ if menu == "Novo Orçamento":
         st.success(f"✅ PDF salvo em disco: {pdf_path}")
 
         # Download button (único key por orçamento)
-        st.download_button(
-            "⬇️ Baixar PDF",
-            data=pdf_bytes,
+        download_key = f"download_generated_{orcamento_id}_{int(datetime.now().timestamp())}"
+            st.download_button(
+             "⬇️ Baixar PDF",
+                data=pdf_bytes,
             file_name=pdf_path,
             mime="application/pdf",
-            key=f"download_generated_{orcamento_id}"
+            key=f"download_key_{orcamento_id}"
         )
 
 # ============================
@@ -723,13 +724,14 @@ if menu == "Histórico de Orçamentos":
 
                     with col2:
                         if os.path.exists(pdf_path):
-                            with open(pdf_path, "rb") as f:
-                                st.download_button(
+                            download_key = f"download_hist_{orc_id}_{int(datetime.now().timestamp())}"
+                                with open(pdf_path, "rb") as f:
+                                    st.download_button(
                                     "⬇️ Baixar PDF",
                                     f,
                                     file_name=pdf_path,
                                     mime="application/pdf",
-                                    key=f"download_{orc_id}"
+                                    key=download_key
                                 )
                         else:
                             st.warning("PDF ainda não gerado.")
