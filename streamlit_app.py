@@ -37,10 +37,8 @@ def init_db():
     
     # 2. Migração de Schema: Adiciona a coluna preco_m2_base se ela não existir
     try:
-        # Tenta selecionar a coluna. Se falhar, ela não existe.
         cur.execute("SELECT preco_m2_base FROM orcamentos LIMIT 1")
     except sqlite3.OperationalError:
-        # Adiciona a coluna se o erro for porque ela não existe
         cur.execute("ALTER TABLE orcamentos ADD COLUMN preco_m2_base REAL")
         print("Migração de DB: Coluna 'preco_m2_base' adicionada à tabela 'orcamentos'.")
 
@@ -74,7 +72,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-# Função atualizada para salvar preco_m2_base
 def salvar_orcamento(cliente, vendedor, itens_confeccionados, itens_bobinas, observacao, preco_m2_base):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
@@ -125,7 +122,7 @@ def buscar_orcamentos():
 def carregar_orcamento_por_id(orcamento_id):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
-    # SELECT * agora retorna 13 colunas (0 a 12)
+    orc_cols = ['id','data_hora','cliente_nome','cliente_cnpj','tipo_cliente','estado','frete','tipo_pedido','vendedor_nome','vendedor_tel','vendedor_email','observacao', 'preco_m2_base']
     cur.execute("SELECT * FROM orcamentos WHERE id=?", (orcamento_id,))
     orc = cur.fetchone()
     cur.execute("SELECT produto, comprimento, largura, quantidade, cor FROM itens_confeccionados WHERE orcamento_id=?", (orcamento_id,))
@@ -145,16 +142,16 @@ def _format_brl(v):
         return f"R$ {v}"
 
 # ============================
-# Cálculos
+# Cálculos (manter funções de cálculo como estão)
 # ============================
-st_por_estado = {}  
+st_por_estado = {} # Declarado aqui, populado abaixo
 
 def calcular_valores_confeccionados(itens, preco_m2, tipo_cliente="", estado="", tipo_pedido="Direta"):
     if not itens:
         return 0.0, 0.0, 0.0, 0.0, 0.0, 0
     m2_total = sum(item['comprimento'] * item['largura'] * item['quantidade'] for item in itens)
     valor_bruto = m2_total * preco_m2
-
+    # Lógica de IPI e ST... (mantida)
     if tipo_pedido == "Industrialização":
         valor_ipi = 0
         valor_st = 0
@@ -210,16 +207,22 @@ def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
     return m_total, valor_bruto, valor_ipi, valor_final
 
 # ============================
-# Função para gerar PDF (retorna bytes)
+# Função para gerar PDF (ATUALIZADA com ID)
 # ============================
-def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_conf, resumo_bob, observacao, preco_m2, tipo_cliente="", estado=""):
+def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_conf, resumo_bob, observacao, preco_m2, tipo_cliente="", estado=""):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.set_font("Arial", "B", 14)
 
-    # Cabeçalho
+    # Cabeçalho principal
     pdf.cell(0, 12, "Orçamento - Grupo Locomotiva", ln=True, align="C")
+    
+    # NOVO: Inclusão do ID do Orçamento
+    if orcamento_id:
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(0, 6, f"ID do Orçamento: {orcamento_id}", ln=True, align="C")
+    
     pdf.ln(10)
     pdf.set_font("Arial", size=9)
     brasilia_tz = pytz.timezone("America/Sao_Paulo")
@@ -336,14 +339,14 @@ def gerar_pdf(cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_con
 # ============================
 init_db()
 
-# session state defaults for form fields (so reabrir can populate)
+# session state defaults
 defaults = {
     "Cliente_nome": "", "Cliente_CNPJ": "", "tipo_cliente": " ",
     "estado": "SP", 
     "tipo_pedido": "Direta", "preco_m2": 0.0, "itens_confeccionados": [],
     "bobinas_adicionadas": [], "frete_sel": "CIF", "obs": "",
     "vend_nome": "", "vend_tel": "", "vend_email": "",
-    "menu_index": 0 
+    "menu_index": 0 # Controla o índice do menu
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -356,9 +359,17 @@ st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", 
 st.title("Orçamento - Grupo Locomotiva")
 
 # --- Menu ---
-menu = st.sidebar.selectbox("Menu", ["Novo Orçamento","Histórico de Orçamentos"], index=st.session_state['menu_index'])
-if st.session_state['menu_index'] != 0 and menu == "Novo Orçamento":
-    st.session_state['menu_index'] = 0
+menu_options = ["Novo Orçamento","Histórico de Orçamentos"]
+menu = st.sidebar.selectbox(
+    "Menu", 
+    menu_options, 
+    index=st.session_state['menu_index'], # Usa o índice controlado pelo session state
+    key='main_menu_select' # Chave para controle explícito
+)
+
+# Atualiza o menu_index se o usuário mudou o menu manualmente
+if menu != menu_options[st.session_state['menu_index']]:
+    st.session_state['menu_index'] = menu_options.index(menu)
 
 # ============================
 # Tabelas de ICMS e ST
@@ -618,8 +629,9 @@ if menu == "Novo Orçamento":
         resumo_conf = calcular_valores_confeccionados(st.session_state["itens_confeccionados"], st.session_state.get("preco_m2",0.0), st.session_state.get("tipo_cliente"," "), st.session_state.get("estado",""), st.session_state.get("tipo_pedido","Direta")) if st.session_state["itens_confeccionados"] else None
         resumo_bob = calcular_valores_bobinas(st.session_state["bobinas_adicionadas"], st.session_state.get("preco_m2",0.0), st.session_state.get("tipo_pedido","Direta")) if st.session_state["bobinas_adicionadas"] else None
 
-        # Gerar PDF bytes
+        # Gerar PDF bytes (ATUALIZADO: Passando orcamento_id)
         pdf_bytes = gerar_pdf(
+            orcamento_id, # <-- NOVO: ID do orçamento salvo
             cliente,
             vendedor,
             st.session_state["itens_confeccionados"],
@@ -642,7 +654,7 @@ if menu == "Novo Orçamento":
             st.warning(f"⚠️ Não foi possível salvar o PDF no disco: {e}")
 
 
-        # Download button (CORREÇÃO DE ERRO)
+        # Download button 
         download_key = f"download_generated_{orcamento_id}_{int(datetime.now().timestamp())}"
         st.download_button(
             "⬇️ Baixar PDF",
@@ -693,7 +705,7 @@ if menu == "Histórico de Orçamentos":
         if not orcamentos_filtrados:
             st.warning("Nenhum orçamento encontrado com os filtros selecionados.")
         else:
-            # Exportar Excel (ATUALIZADO com Preço e Valor Final Total)
+            # Exportar Excel
             if st.button("📊 Exportar Excel do Histórico Filtrado"):
                 linhas_excel = []
                 orc_cols = ['id','data_hora','cliente_nome','cliente_cnpj','tipo_cliente','estado','frete','tipo_pedido','vendedor_nome','vendedor_tel','vendedor_email','observacao', 'preco_m2_base']
@@ -703,10 +715,8 @@ if menu == "Histórico de Orçamentos":
                     orc, confecc, bob = carregar_orcamento_por_id(orc_id)
                     
                     orc_data = dict(zip(orc_cols, orc))
-                    # O valor de preco_m2_base pode ser None (para orçamentos antigos)
                     preco_m2_base = orc_data.get('preco_m2_base') if orc_data.get('preco_m2_base') is not None else 0.0
 
-                    # 1. Recalcula os Totais (para o relatório Excel)
                     itens_conf_calc = [dict(zip(['produto','comprimento','largura','quantidade','cor'], c)) for c in confecc]
                     itens_bob_calc = [dict(zip(['produto','comprimento','largura','quantidade','cor','espessura','preco_unitario'], b)) for b in bob]
 
@@ -720,7 +730,6 @@ if menu == "Histórico de Orçamentos":
                     
                     valor_final_total = resumo_conf[3] + resumo_bob[3]
                     
-                    # 2. Adiciona dados na linha do Excel (item a item)
                     for c in confecc:
                         linhas_excel.append({
                             "ID": orc_id, "Data": data_hora, "Cliente": cliente_nome, "CNPJ": cliente_cnpj,
@@ -763,7 +772,7 @@ if menu == "Histórico de Orçamentos":
                     st.markdown(f"**CNPJ:** {cliente_cnpj}")
                     st.markdown(f"**Vendedor:** {vendedor_nome}")
                     preco_m2_base_display = orc_data.get('preco_m2_base') if orc_data.get('preco_m2_base') is not None else 0.0
-                    st.markdown(f"**Preço Base Utilizado (💵):** {_format_brl(preco_m2_base_display)}")
+                    st.markdown(f"**Preço Base Utilizado (R$):** {_format_brl(preco_m2_base_display)}")
 
                     if confecc:
                         st.markdown("### ⬛ Itens Confeccionados")
@@ -778,6 +787,7 @@ if menu == "Histórico de Orçamentos":
 
                     col1, col2, col3 = st.columns([1,1,1])
                     with col1:
+                        # Reabrir (ATUALIZADO: Força o índice do menu e reruns)
                         if st.button("🔄 Reabrir", key=f"reabrir_{orc_id}"):
                             
                             preco_m2_base = orc_data.get('preco_m2_base') if orc_data.get('preco_m2_base') is not None else 0.0
@@ -803,13 +813,15 @@ if menu == "Histórico de Orçamentos":
                                 "produto_sel": primeiro_produto if primeiro_produto else " ", 
                                 "itens_confeccionados": [dict(zip(['produto','comprimento','largura','quantidade','cor'],c)) for c in confecc],
                                 "bobinas_adicionadas": [dict(zip(['produto','comprimento','largura','quantidade','cor','espessura','preco_unitario'],b)) for b in bob],
-                                "menu_index": 0 
+                                "menu_index": 0 # Força a seleção do menu para "Novo Orçamento" (índice 0)
                             })
                             st.success(f"Orçamento ID {orc_id} carregado no formulário.")
-                            st.rerun()
+                            st.rerun() # Reinicia a aplicação para aplicar a mudança de menu
 
                     with col2:
+                        # Baixar PDF (ATUALIZADO: Passando orc_id)
                         pdf_bytes = gerar_pdf(
+                            orc_id, # <-- NOVO: ID do orçamento
                             cliente={
                                 "nome": orc[2],
                                 "cnpj": orc[3],
