@@ -400,16 +400,16 @@ def reset_historico_filters():
     # O Streamlit faz o rerun automaticamente após a função on_click.
 
 # ============================
-# Constantes de Vendedores (NOVO - REQ. 1)
+# Constantes de Vendedores
 # ============================
 VENDEDORES = {
     "Selecione um Vendedor": {"nome": "", "tel": "", "email": ""},
     "Rafael Rodrigues": {"nome": "Rafael Rodrigues", "tel": "11 99150-0804", "email": "rrodrigues@locomotiva.com.br"},
-    "Tiago Vitor": {"nome": "Tiago Vitor", "tel": "11 97697-8167", "email": "tvitor@locomotiva.com.br"}
+    "Tiago Victor": {"nome": "Tiago Victor", "tel": "11 97697-8167", "email": "tvitor@locomotiva.com.br"}
 }
 VENDEDORES_NOMES = list(VENDEDORES.keys())
 
-# Função para atualizar o Session State baseado na seleção (NOVO - REQ. 1)
+# Função para atualizar o Session State baseado na seleção
 def update_vendedor_details():
     selected_name = st.session_state["vendedor_select"]
     details = VENDEDORES.get(selected_name, {"nome": selected_name, "tel": "", "email": ""})
@@ -418,7 +418,7 @@ def update_vendedor_details():
     st.session_state["vend_email"] = details["email"]
 
 # ============================
-# Funções de Resumo para Exportação Excel (NOVO - REQ. 2)
+# Funções de Resumo para Exportação Excel
 # ============================
 def get_order_summary_info(confecc, bob):
     # confecc: (produto, comprimento, largura, quantidade, cor)
@@ -539,10 +539,13 @@ if menu == "Novo Orçamento":
     with col2:
         Cliente_CNPJ = st.text_input("CNPJ ou CPF (Opcional)", value=st.session_state.get("Cliente_CNPJ",""), key="Cliente_CNPJ")
 
+    # --- INÍCIO DA REORDENAÇÃO (REQ. DO USUÁRIO) ---
+    # 1. Dados do Cliente: Tipo do Pedido (Radio) antes do Tipo do Cliente e Estado (Selectboxes)
+    tipo_pedido = st.radio("Tipo do Pedido:", ["Direta", "Industrialização"], index=0 if st.session_state.get("tipo_pedido","Direta")=="Direta" else 1, key="tipo_pedido")
+    
     tipo_cliente = st.selectbox("Tipo do Cliente:", [" ","Consumidor Final", "Revenda"], index=0 if st.session_state.get("tipo_cliente"," ") == " " else (1 if st.session_state.get("tipo_cliente")=="Consumidor Final" else 2), key="tipo_cliente")
     estado = st.selectbox("Estado do Cliente:", options=list(icms_por_estado.keys()), index=list(icms_por_estado.keys()).index(st.session_state.get("estado")) if st.session_state.get("estado") in icms_por_estado else 0, key="estado")
-
-    tipo_pedido = st.radio("Tipo do Pedido:", ["Direta", "Industrialização"], index=0 if st.session_state.get("tipo_pedido","Direta")=="Direta" else 1, key="tipo_pedido")
+    # --- FIM DA REORDENAÇÃO (REQ. DO USUÁRIO) ---
 
     produtos_lista = [
         " ","Lonil de PVC","Lonil KP","Lonil Inflável KP","Encerado","Duramax",
@@ -568,8 +571,14 @@ if menu == "Novo Orçamento":
     # Seleção de Produto (interface para adicionar)
     st.markdown("---")
     st.subheader("➕ Adicionar Produto")
-    produto = st.selectbox("Nome do Produto:", options=produtos_lista, index=produtos_lista.index(st.session_state.get("produto_sel")) if st.session_state.get("produto_sel") in produtos_lista else 0, key="produto_sel")
+    
+    # --- INÍCIO DA REORDENAÇÃO (REQ. DO USUÁRIO) ---
+    # 2. Adicionar Produto: Tipo do Produto (Radio) antes do Nome do Produto (Selectbox)
     tipo_produto = st.radio("Tipo do Produto:", ["Confeccionado", "Bobina"], key="tipo_prod_sel")
+    
+    produto = st.selectbox("Nome do Produto:", options=produtos_lista, index=produtos_lista.index(st.session_state.get("produto_sel")) if st.session_state.get("produto_sel") in produtos_lista else 0, key="produto_sel")
+    # --- FIM DA REORDENAÇÃO (REQ. DO USUÁRIO) ---
+    
     preco_m2 = st.number_input("Preço por m² ou metro linear (R$):", min_value=0.0, value=st.session_state.get("preco_m2",0.0), step=0.01, key="preco_m2")
 
     # ICMS automático
@@ -725,7 +734,7 @@ if menu == "Novo Orçamento":
     Observacao = st.text_area("Insira aqui alguma observação sobre o orçamento (opcional)", value=st.session_state.get("obs",""), key="obs")
 
     # -----------------------------------------------------
-    # NOVO: Seleção do Vendedor por Dropdown (REQ. 1)
+    # Seleção do Vendedor por Dropdown 
     # -----------------------------------------------------
     st.subheader("🗣️ Vendedor(a)")
     
@@ -756,8 +765,6 @@ if menu == "Novo Orçamento":
     st.markdown(f"**Telefone:** {st.session_state.get('vend_tel')}")
     st.markdown(f"**E-mail:** {st.session_state.get('vend_email')}")
     st.markdown("---")
-    # -----------------------------------------------------
-    # FIM NOVO
     # -----------------------------------------------------
 
     # Botão gerar e salvar
@@ -958,7 +965,7 @@ if menu == "Histórico de Orçamentos":
                     st.markdown(f"**Cliente:** {cliente_nome}")
                     st.markdown(f"**CNPJ:** {cliente_cnpj}")
                     st.markdown(f"**Vendedor:** {vendedor_nome}")
-                    st.markdown(f"**Preço Base Utilizado (💵):** {_format_brl(preco_m2_base)}") 
+                    st.markdown(f"**Preço Base Utilizado (R$):** {_format_brl(preco_m2_base)}") 
 
                     if confecc:
                         st.markdown("### ⬛ Itens Confeccionados")
@@ -982,7 +989,7 @@ if menu == "Histórico de Orçamentos":
                             elif bob:
                                 primeiro_produto = bob[0][0]
                                 
-                            # NOVO: Define o nome do vendedor para pre-selecionar no selectbox (REQ. 1)
+                            # NOVO: Define o nome do vendedor para pre-selecionar no selectbox
                             vendedor_nome_orc = orc[8] or ""
                             if vendedor_nome_orc not in VENDEDORES_NOMES:
                                 st.session_state["vendedor_select"] = VENDEDORES_NOMES[0] # Default
@@ -1046,15 +1053,3 @@ if menu == "Histórico de Orçamentos":
                             mime="application/pdf",
                             key=f"download_historico_{orc_id}"
                         )
-                        with col3:
-                            if st.button("❌ Excluir", key=f"excluir_{orc_id}"):
-                                conn = sqlite3.connect(DB_NAME) 
-                                cur = conn.cursor()
-                                cur.execute("DELETE FROM orcamentos WHERE id=?", (orc_id,))
-                                cur.execute("DELETE FROM itens_confeccionados WHERE orcamento_id=?", (orc_id,))
-                                cur.execute("DELETE FROM itens_bobinas WHERE orcamento_id=?", (orc_id,))
-                                conn.commit()
-                                conn.close()
-                                st.success(f"Orçamento ID {orc_id} excluído!")
-                                st.rerun()
-                            
