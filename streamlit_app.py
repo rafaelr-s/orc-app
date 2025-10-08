@@ -1027,10 +1027,9 @@ if menu == "Histórico de Orçamentos":
                             })
                             st.success(f"Orçamento ID {orc_id} carregado no formulário.")
                             st.rerun()
-
-                    with col2:
-                        # Baixar PDF 
-                        itens_bob_calc = [dict(zip(['produto','comprimento','largura','quantidade','cor','espessura','preco_unitario'], b)) for b in bob]
+                            with col2:
+                                # Baixar PDF
+                                itens_bob_calc = [dict(zip(['produto','comprimento','largura','quantidade','cor','espessura','preco_unitario'], b)) for b in bob]
                         # Chamada retorna 5 valores
                         resumo_bob_calc = calcular_valores_bobinas(
                             itens_bob_calc, preco_m2_base, orc_data['tipo_pedido']
@@ -1065,3 +1064,6 @@ if menu == "Histórico de Orçamentos":
                             mime="application/pdf",
                             key=f"download_historico_{orc_id}"
                         )
+                    
+                         
+                        
