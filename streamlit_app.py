@@ -268,10 +268,10 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
         pdf.cell(0, 8, "Itens Confeccionados", ln=True)
         pdf.set_font("Arial", size=8)
         for item in itens_confeccionados:
-        area_item = item['comprimento'] * item['largura'] * item['quantidade']
-        preco_item = item.get('preco_unitario', preco_m2)
-        valor_item = area_item * preco_item
-        txt = (
+            area_item = item['comprimento'] * item['largura'] * item['quantidade']
+            preco_item = item.get('preco_unitario', preco_m2)
+            valor_item = area_item * preco_item
+            txt = (
             f"{item['quantidade']}x {item['produto']} - {item['comprimento']}m x {item['largura']}m "
             f"= {area_item:.2f} m² × {_format_brl(preco_item)}/m² → {_format_brl(valor_item)}"
         )
