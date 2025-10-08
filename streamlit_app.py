@@ -607,7 +607,8 @@ if menu == "Novo Orçamento":
                 'comprimento': float(comprimento),
                 'largura': float(largura),
                 'quantidade': int(quantidade),
-                'cor': ""
+                'cor': "",
+                'preco_unitario': st.session_state.get("preco_m2", 0.0)
             })
 
         if st.session_state['itens_confeccionados']:
@@ -635,9 +636,10 @@ if menu == "Novo Orçamento":
             st.session_state['itens_confeccionados'] = []
             st.rerun()
 
+        # Resumo confeccionados (usar preco por item)
         if st.session_state['itens_confeccionados']:
             m2_total, valor_bruto, valor_ipi, valor_final, valor_st, aliquota_st = calcular_valores_confeccionados(
-                st.session_state['itens_confeccionados'], preco_m2, tipo_cliente, estado, tipo_pedido
+                st.session_state['itens_confeccionados'], st.session_state.get("preco_m2",0.0), st.session_state.get("tipo_cliente"," "), st.session_state.get("estado",""), st.session_state.get("tipo_pedido","Direta")
             )
             st.markdown("---")
             st.success("💰 **Resumo do Pedido - Confeccionado**")
