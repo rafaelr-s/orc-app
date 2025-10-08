@@ -149,35 +149,41 @@ st_por_estado = {}
 def calcular_valores_confeccionados(itens, preco_m2, tipo_cliente="", estado="", tipo_pedido="Direta"):
     if not itens:
         return 0.0, 0.0, 0.0, 0.0, 0.0, 0
-    m2_total = sum(item['comprimento'] * item['largura'] * item['quantidade'] for item in itens)
-    valor_bruto = m2_total * preco_m2
-    # Lógica de IPI e ST... (mantida)
+
+    # Agora calculamos usando o preco por item (se existir), senão usa o preco_m2 passado
+    m2_total = 0.0
+    valor_bruto = 0.0
+    for item in itens:
+        preco_item = item.get('preco_unitario', preco_m2)
+        area_item = item['comprimento'] * item['largura'] * item['quantidade']
+        m2_total += area_item
+        valor_bruto += area_item * preco_item
+
+    # Lógica de IPI e ST (mantida, mas aplicada sobre os valores por item)
     if tipo_pedido == "Industrialização":
-        valor_ipi = 0
-        valor_st = 0
+        valor_ipi = 0.0
+        valor_st = 0.0
         aliquota_st = 0
         valor_final = valor_bruto
     else:
         IPI_CONFECCIONADO_DEFAULT = 0.0325
         IPI_ZERO_PRODS = ["Acrylic", "Agora"]
         IPI_ZERO_PREFIXES = ["Tela de Sombreamento"]
-        
+
         valor_ipi_acumulado = 0.0
-        
         for item in itens:
             produto = item.get('produto', '')
-            valor_item = item['comprimento'] * item['largura'] * item['quantidade'] * preco_m2
+            preco_item = item.get('preco_unitario', preco_m2)
+            area_item = item['comprimento'] * item['largura'] * item['quantidade']
             ipi_rate = IPI_CONFECCIONADO_DEFAULT
-
             if produto in IPI_ZERO_PRODS or any(produto.startswith(prefix) for prefix in IPI_ZERO_PREFIXES):
                 ipi_rate = 0.0
-            
-            valor_ipi_acumulado += valor_item * ipi_rate
+            valor_ipi_acumulado += area_item * preco_item * ipi_rate
 
         valor_ipi = valor_ipi_acumulado
         valor_final = valor_bruto + valor_ipi
-        
-        valor_st = 0
+
+        valor_st = 0.0
         aliquota_st = 0
         if any(item.get('produto') == "Encerado" for item in itens) and tipo_cliente == "Revenda":
             aliquota_st = st_por_estado.get(estado, 0)
@@ -185,7 +191,7 @@ def calcular_valores_confeccionados(itens, preco_m2, tipo_cliente="", estado="",
             valor_final += valor_st
 
     return m2_total, valor_bruto, valor_ipi, valor_final, valor_st, aliquota_st
-
+    
 # FUNÇÃO CORRIGIDA PARA IPI DE CAPOTA MARÍTIMA
 def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
     IPI_RATE_DEFAULT = 0.0975 # 9.75%
@@ -262,15 +268,18 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
         pdf.cell(0, 8, "Itens Confeccionados", ln=True)
         pdf.set_font("Arial", size=8)
         for item in itens_confeccionados:
-            area_item = item['comprimento'] * item['largura'] * item['quantidade']
-            valor_item = area_item * preco_m2
-            txt = (
-                f"{item['quantidade']}x {item['produto']} - {item['comprimento']}m x {item['largura']}m "
-                f"| Cor: {item.get('cor','')} | Valor Bruto: {_format_brl(valor_item)}"
-            )
+        area_item = item['comprimento'] * item['largura'] * item['quantidade']
+        preco_item = item.get('preco_unitario', preco_m2)
+        valor_item = area_item * preco_item
+        txt = (
+            f"{item['quantidade']}x {item['produto']} - {item['comprimento']}m x {item['largura']}m "
+            f"= {area_item:.2f} m² × {_format_brl(preco_item)}/m² → {_format_brl(valor_item)}"
+        )
+        if item.get('cor'):
+            txt += f" | Cor: {item.get('cor')}"
             pdf.multi_cell(largura_util, 6, txt)
             pdf.ln(1)
-
+    
     # Resumo Confeccionados
     if resumo_conf:
         m2_total, valor_bruto, valor_ipi, valor_final, valor_st, aliquota_st = resumo_conf
@@ -617,11 +626,12 @@ if menu == "Novo Orçamento":
                 col1, col2, col3, col4 = st.columns([3,2,2,1])
                 with col1:
                     area_item = item['comprimento'] * item['largura'] * item['quantidade']
-                    valor_item = area_item * preco_m2
+                    preco_item = item.get('preco_unitario', st.session_state.get("preco_m2", 0.0))
+                    valor_item = area_item * preco_item
                     st.markdown(f"**{item['produto']}**")
                     st.markdown(
-                        f"🔹 {item['quantidade']}x {item['comprimento']:.2f}m x {item['largura']:.2f}m "
-                        f"= {area_item:.2f} m² → {_format_brl(valor_item)}"
+                        f"🔹 {item['quantidade']}x {item['comprimento']:.2f}m x {item['largura']:.2f}m = {area_item:.2f} m² "
+                        f"× {_format_brl(preco_item)}/m² → {_format_brl(valor_item)}"
                     )
                 with col2:
                     # Usando chaves únicas para inputs dinâmicos
