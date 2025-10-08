@@ -234,6 +234,15 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.set_font("Arial", "B", 14)
 
+    # ===== Adicionar fonte Unicode =====
+    # Baixe a fonte DejaVuSans.ttf e coloque na pasta do app
+    fonte_path = os.path.join(os.getcwd(), "DejaVuSans.ttf")
+    if not os.path.isfile(fonte_path):
+        raise FileNotFoundError(f"Fonte TTF não encontrada em: {fonte_path}")
+
+    pdf.add_font("DejaVu", "", fonte_path, uni=True)
+    pdf.set_font("DejaVu", "", 12)
+
     # Cabeçalho principal
     pdf.cell(0, 12, "Orçamento - Grupo Locomotiva", ln=True, align="C")
     
@@ -356,7 +365,7 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
         pdf.ln(5)
 
     # Retorna bytes do PDF
-    pdf_bytes = pdf.output(dest='S').encode('utf-8')
+    pdf_bytes = pdf.output(dest='S').encode('latin1')
     return pdf_bytes
 
 # ============================
