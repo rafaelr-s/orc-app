@@ -378,15 +378,8 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
         pdf.ln(5)
 
     # Retorna bytes do PDF
-    try:
         pdf_bytes = pdf.output(dest='B')
-    except Exception as e:
-        # Em raras versões da fpdf que não suportam 'B' ou se houver um erro de codificação,
-        # voltamos ao 'S' e forçamos a codificação mais ampla para evitar erros de caracteres.
-        pdf_output = pdf.output(dest='S')
-        pdf_bytes = pdf_output.encode('latin1', 'replace')
-        
-    return pdf_bytes
+        return pdf_bytes
 
 # ============================
 # Funções de Reset
