@@ -922,7 +922,7 @@ if menu == "Histórico de Orçamentos":
                 st.markdown("### ⬛ Itens Confeccionados")
                 for c in confecc:
                     # c[5] é o preco_unitario (travado)
-                    preco_unit = c[5] if c[5] is not None else preco_m2
+                    preco_unit = c[5] if (len(c) > 5 and c[5] is not None) else preco_m2
                     st.markdown(f"- **{c[0]}**: {c[3]}x {c[1]:.2f}m x {c[2]:.2f}m | Cor: {c[4]} | R$/m²: {_format_brl(preco_unit)}")
 
             if bob:
