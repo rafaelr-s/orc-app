@@ -37,20 +37,6 @@ def init_db():
     
     # 2. Migração de Schema: Adiciona a coluna preco_m2 se ela não existir
     try:
-        # A coluna 'preco_m2' já existe no CREATE TABLE acima, mas a lógica de migração parece tentar adicionar 'preco_m2_base'.
-        # Mantendo a lógica original do arquivo para a migração que pode ter sido usada em uma versão anterior, 
-        # mas garantindo que o nome da coluna usada no SELECT/INSERT é 'preco_m2'.
-        # O problema no `salvar_orcamento` é usar `preco_m2_base` em vez de `preco_m2` (que é o nome da coluna no DB).
-        # Para evitar problemas com a base de dados em execução, assumirei que a coluna usada é 'preco_m2_base' no INSERT/SELECT para a base_price.
-        # CORREÇÃO: A tabela foi criada com 'preco_m2' no passo 1. O código de migração abaixo a renomeia ou adiciona 'preco_m2_base'. 
-        # Para consistência com o restante do código que usa 'preco_m2_base' (como a exportação para Excel), vamos manter o nome 'preco_m2_base' 
-        # para a coluna do preço base no DB, e corrigir a função salvar_orcamento. 
-        # A coluna 'preco_m2' da instrução CREATE TABLE (linha 30) será ignorada pelo resto do código, pois o código de migração usa 'preco_m2_base'.
-
-        # Revertendo a correção da linha 30 para usar 'preco_m2_base' para consistência, se o código de migração abaixo for o pretendido.
-        # No entanto, para evitar grandes mudanças na estrutura do DB, manterei o CREATE TABLE original e corrigirei a migração/insert.
-        # O código de migração está *correto* ao verificar `preco_m2` e adicionar `preco_m2_base` se falhar.
-
         cur.execute("SELECT preco_m2 FROM orcamentos LIMIT 1")
     except sqlite3.OperationalError:
         try:
