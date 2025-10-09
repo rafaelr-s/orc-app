@@ -1033,8 +1033,7 @@ if menu == "Histórico de Orçamentos":
                         # Chamada retorna 5 valores
                         resumo_bob_calc = calcular_valores_bobinas(
                             itens_bob_calc, preco_m2_base, orc_data['tipo_pedido']
-                        ) 
-                        if itens_bob_calc else (0, 0, 0, 0, 0.0975)
+                        ) if itens_bob_calc else (0, 0, 0, 0, 0.0975)
                         
                         pdf_bytes = gerar_pdf(
                             orc_id, 
