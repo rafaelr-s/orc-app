@@ -251,7 +251,8 @@ def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
 # ============================
 # Função para gerar PDF
 # ============================
-def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_conf, resumo_bob, observacao, preco_m2, tipo_cliente="", estado=""):
+from typing import Union
+def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_conf, resumo_bob, observacao, preco_m2, tipo_cliente="", estado="") -> bytes:
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -378,7 +379,16 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
         pdf.ln(5)
 
     # Retorna bytes do PDF
-    pdf_bytes = pdf.output(dest='S')
+    pdf_output: Union[str, bytes] = pdf.output(dest='S')
+
+    if isinstance(pdf_output, str):
+        # Se for uma string, codifica para bytes. 
+        # Mantendo o 'latin1' que é o padrão para fpdf ao gerar strings.
+        pdf_bytes = pdf_output.encode('latin1')
+    else:
+        # Se já for bytes, usa diretamente (evitando o AttributeError anterior)
+        pdf_bytes = pdf_output 
+        
     return pdf_bytes
 
 # ============================
