@@ -364,8 +364,14 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
         pdf.ln(5)
 
     # Retorna bytes do PDF
-        pdf_bytes = pdf.output(dest='B')
-        return pdf_bytes
+    # CORREÇÃO FINAL: Usa BytesIO para garantir um objeto de bytes válido para o Streamlit,
+    # eliminando o erro de tipo de dado.
+    pdf_output_buffer = BytesIO()
+    pdf.output(dest='F', name=pdf_output_buffer)
+    pdf_bytes = pdf_output_buffer.getvalue()
+    pdf_output_buffer.close()
+    
+    return pdf_bytes
 
 # ============================
 # Funções de Reset
@@ -838,11 +844,12 @@ if menu == "Novo Orçamento":
         # Salvar no disco (opcional)
         pdf_path = f"orcamento_{orcamento_id}.pdf"
         try:
-            with open(pdf_path, "wb") as f:
-                f.write(pdf_bytes)
-            st.success(f"✅ PDF salvo em disco: {pdf_path}")
+            # Não é necessário salvar em disco para o download, mas se o usuário quiser a funcionalidade:
+            # with open(pdf_path, "wb") as f:
+            #     f.write(pdf_bytes)
+            st.success(f"✅ PDF gerado com sucesso!")
         except Exception as e:
-            st.warning(f"⚠️ Não foi possível salvar o PDF no disco: {e}")
+            st.warning(f"⚠️ Erro ao tentar salvar/gerar o PDF: {e}")
 
         # Download button 
         st.download_button(
