@@ -2,7 +2,7 @@ import os
 import streamlit as st
 from datetime import datetime, timedelta
 import pytz
-from fpdf import FPDF
+from fpdf2 import FPDF
 import sqlite3
 import pandas as pd
 from io import BytesIO
