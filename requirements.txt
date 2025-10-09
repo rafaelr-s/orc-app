@@ -1,5 +1,5 @@
 streamlit
 datetime
 pytz
-fpdf
+fpdf2
 openpyxl
