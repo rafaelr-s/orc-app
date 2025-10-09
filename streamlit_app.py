@@ -273,7 +273,7 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
             valor_item = area_item * preco_item
             txt = (
             f"{item['quantidade']}x {item['produto']} - {item['comprimento']}m x {item['largura']}m "
-            f"= {area_item:.2f} m² × {_format_brl(preco_item)}/m² → {_format_brl(valor_item)}"
+            f"= {area_item:.2f} m² × {_format_brl(preco_item)}/m² {_format_brl(valor_item)}"
         )
         if item.get('cor'):
             txt += f" | Cor: {item.get('cor')}"
