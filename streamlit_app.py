@@ -1,3 +1,27 @@
+import os
+import streamlit as st
+from datetime import datetime, timedelta
+import pytz
+from fpdf import FPDF
+import sqlite3
+import pandas as pd
+from io import BytesIO
+
+# ============================
+# Banco SQLite
+# ============================
+DB_NAME = "orcamentos.db" 
+
+def init_db():
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    
+    # 1. Cria ou verifica a tabela orcamentos (com a nova coluna preco_m2)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS orcamentos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            data_hora TEXT,
+            cliente_nome TEXT,
             cliente_cnpj TEXT,
             tipo_cliente TEXT,
             estado TEXT,
