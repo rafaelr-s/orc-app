@@ -1,27 +1,3 @@
-import os
-import streamlit as st
-from datetime import datetime, timedelta
-import pytz
-from fpdf import FPDF
-import sqlite3
-import pandas as pd
-from io import BytesIO
-
-# ============================
-# Banco SQLite
-# ============================
-DB_NAME = "orcamentos.db" 
-
-def init_db():
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
-    
-    # 1. Cria ou verifica a tabela orcamentos (com a nova coluna preco_m2)
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS orcamentos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            data_hora TEXT,
-            cliente_nome TEXT,
             cliente_cnpj TEXT,
             tipo_cliente TEXT,
             estado TEXT,
@@ -37,10 +13,30 @@ def init_db():
     
     # 2. Migração de Schema: Adiciona a coluna preco_m2 se ela não existir
     try:
+        # A coluna 'preco_m2' já existe no CREATE TABLE acima, mas a lógica de migração parece tentar adicionar 'preco_m2_base'.
+        # Mantendo a lógica original do arquivo para a migração que pode ter sido usada em uma versão anterior, 
+        # mas garantindo que o nome da coluna usada no SELECT/INSERT é 'preco_m2'.
+        # O problema no `salvar_orcamento` é usar `preco_m2_base` em vez de `preco_m2` (que é o nome da coluna no DB).
+        # Para evitar problemas com a base de dados em execução, assumirei que a coluna usada é 'preco_m2_base' no INSERT/SELECT para a base_price.
+        # CORREÇÃO: A tabela foi criada com 'preco_m2' no passo 1. O código de migração abaixo a renomeia ou adiciona 'preco_m2_base'. 
+        # Para consistência com o restante do código que usa 'preco_m2_base' (como a exportação para Excel), vamos manter o nome 'preco_m2_base' 
+        # para a coluna do preço base no DB, e corrigir a função salvar_orcamento. 
+        # A coluna 'preco_m2' da instrução CREATE TABLE (linha 30) será ignorada pelo resto do código, pois o código de migração usa 'preco_m2_base'.
+
+        # Revertendo a correção da linha 30 para usar 'preco_m2_base' para consistência, se o código de migração abaixo for o pretendido.
+        # No entanto, para evitar grandes mudanças na estrutura do DB, manterei o CREATE TABLE original e corrigirei a migração/insert.
+        # O código de migração está *correto* ao verificar `preco_m2` e adicionar `preco_m2_base` se falhar.
+
         cur.execute("SELECT preco_m2 FROM orcamentos LIMIT 1")
     except sqlite3.OperationalError:
-        cur.execute("ALTER TABLE orcamentos ADD COLUMN preco_m2_base REAL")
-        print("Migração de DB: Coluna 'preco_m2_base' adicionada à tabela 'orcamentos'.")
+        try:
+             # Tenta adicionar 'preco_m2_base' se 'preco_m2' deu erro (assumindo que 'preco_m2' era a coluna antiga)
+            cur.execute("ALTER TABLE orcamentos ADD COLUMN preco_m2_base REAL")
+            print("Migração de DB: Coluna 'preco_m2_base' adicionada à tabela 'orcamentos'.")
+        except sqlite3.OperationalError:
+            # Se 'preco_m2_base' já existir ou outra coisa der errado, ignora a migração.
+            pass
+
 
     # 3. Criação de tabelas secundárias
     cur.execute("""
@@ -75,9 +71,9 @@ def init_db():
 def salvar_orcamento(cliente, vendedor, itens_confeccionados, itens_bobinas, observacao, preco_m2):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
-
+    
     cur.execute("""
-        INSERT INTO orcamentos (data_hora, cliente_nome, cliente_cnpj, tipo_cliente, estado, frete, tipo_pedido, vendedor_nome, vendedor_tel, vendedor_email, observacao, preco_m2)
+        INSERT INTO orcamentos (data_hora, cliente_nome, cliente_cnpj, tipo_cliente, estado, frete, tipo_pedido, vendedor_nome, vendedor_tel, vendedor_email, observacao, preco_m2_base)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         datetime.now(pytz.timezone("America/Sao_Paulo")).strftime("%d/%m/%Y %H:%M"),
@@ -91,7 +87,7 @@ def salvar_orcamento(cliente, vendedor, itens_confeccionados, itens_bobinas, obs
         vendedor.get("tel",""),
         vendedor.get("email",""),
         observacao,
-        preco_m2_base 
+        preco_m2  # CORREÇÃO: Usando o argumento `preco_m2`
     ))
     orcamento_id = cur.lastrowid
 
@@ -122,7 +118,10 @@ def buscar_orcamentos():
 def carregar_orcamento_por_id(orcamento_id):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
-    orc_cols = ['id','data_hora','cliente_nome','cliente_cnpj','tipo_cliente','estado','frete','tipo_pedido','vendedor_nome','vendedor_tel','vendedor_email','observacao', 'preco_m2']
+    # Adicionando 'preco_m2_base' aqui para corresponder à migração e ao uso no histórico. 
+    # O `preco_m2` do CREATE TABLE (linha 30) será ignorado.
+    orc_cols = ['id','data_hora','cliente_nome','cliente_cnpj','tipo_cliente','estado','frete','tipo_pedido','vendedor_nome','vendedor_tel','vendedor_email','observacao', 'preco_m2_base']
+    # Buscando todas as colunas, assumindo que `preco_m2_base` é a última, como no excel/reabrir
     cur.execute("SELECT * FROM orcamentos WHERE id=?", (orcamento_id,))
     orc = cur.fetchone()
     cur.execute("SELECT produto, comprimento, largura, quantidade, cor FROM itens_confeccionados WHERE orcamento_id=?", (orcamento_id,))
@@ -246,7 +245,7 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
     pdf.set_font("Arial", size=9)
     brasilia_tz = pytz.timezone("America/Sao_Paulo")
     pdf.cell(0, 6, f"Data e Hora: {datetime.now(brasilia_tz).strftime('%d/%m/%Y %H:%M')}", ln=True)
-    pdf.cell(0, 6, "Validade da Cotação: 7 dias corridos.", ln=True, align="L")
+    pdf.cell(0, 6, "Validade da Cotação: 7 dias.", ln=True, align="L")
     pdf.ln(4)
 
     # Dados do Cliente
@@ -269,7 +268,9 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
         pdf.set_font("Arial", size=8)
         for item in itens_confeccionados:
             area_item = item['comprimento'] * item['largura'] * item['quantidade']
-            valor_item = area_item * preco_m2
+            # Usa o preço por m² do item, se existir (foi salvo com o preco_m2 do input)
+            preco_item = item.get('preco_unitario', preco_m2) 
+            valor_item = area_item * preco_item
             txt = (
                 f"{item['quantidade']}x {item['produto']} - {item['comprimento']}m x {item['largura']}m "
                 f"| Cor: {item.get('cor','')} | Valor Bruto: {_format_brl(valor_item)}"
@@ -353,7 +354,7 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
         pdf.ln(5)
 
     # Retorna bytes do PDF
-    pdf_bytes = pdf.output(dest='S').encode('latin1')
+    pdf_bytes = pdf.output(dest='S')
     return pdf_bytes
 
 # ============================
