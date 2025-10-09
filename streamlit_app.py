@@ -356,7 +356,7 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
         pdf.ln(5)
 
     # Retorna bytes do PDF
-    pdf_bytes = pdf.output(dest='S').encode('utf-8')
+    pdf_bytes = pdf.output(dest='S')
     return pdf_bytes
 
 # ============================
