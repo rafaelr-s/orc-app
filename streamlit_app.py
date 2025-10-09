@@ -251,8 +251,7 @@ def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
 # ============================
 # Função para gerar PDF
 # ============================
-from typing import Union
-def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_conf, resumo_bob, observacao, preco_m2, tipo_cliente="", estado="") -> bytes:
+def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_conf, resumo_bob, observacao, preco_m2, tipo_cliente="", estado=""):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -379,15 +378,13 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
         pdf.ln(5)
 
     # Retorna bytes do PDF
-    pdf_output: Union[str, bytes] = pdf.output(dest='S')
-
-    if isinstance(pdf_output, str):
-        # Se for uma string, codifica para bytes. 
-        # Mantendo o 'latin1' que é o padrão para fpdf ao gerar strings.
-        pdf_bytes = pdf_output.encode('latin1')
-    else:
-        # Se já for bytes, usa diretamente (evitando o AttributeError anterior)
-        pdf_bytes = pdf_output 
+    try:
+        pdf_bytes = pdf.output(dest='B')
+    except Exception as e:
+        # Em raras versões da fpdf que não suportam 'B' ou se houver um erro de codificação,
+        # voltamos ao 'S' e forçamos a codificação mais ampla para evitar erros de caracteres.
+        pdf_output = pdf.output(dest='S')
+        pdf_bytes = pdf_output.encode('latin1', 'replace')
         
     return pdf_bytes
 
