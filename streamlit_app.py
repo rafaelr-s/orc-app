@@ -936,9 +936,12 @@ if menu == "Histórico de Orçamentos":
                     ) if itens_bob_calc else (0, 0, 0, 0, 0.0975) 
                     
                     valor_final_total = resumo_conf[3] + resumo_bob[3]
-                    
+
+                    area_total_bobinas = resumo_bob[0] if tipo_item in ["Bobina", "Misto (Conf. e Bobina)"] else 0.0
+        
                     # 3. Criar uma única linha por pedido com as colunas solicitadas
                     linhas_excel.append({
+                        "Data e Hora": data_hora,
                         "ID": orc_id, 
                         "Nome do Cliente": cliente_nome, 
                         "CNPJ/CPF": cliente_cnpj,
@@ -948,9 +951,10 @@ if menu == "Histórico de Orçamentos":
                         "Tipo do Pedido": orc_data['tipo_pedido'],
                         "Produto Mais Selecionado": produto_mais_sel, 
                         "Tipo do Item": tipo_item,
-                        "Preço Base Utilizado (R$)": preco_m2_base, 
-                        "Área Total em m² (Confeccionado)": m2_total_conf, # Coluna solicitada
-                        "Final Total (R$)": valor_final_total 
+                        "Preço Base Utilizado (R$)": preco_m2_base,
+                        "Área Total em m² (Confeccionado)": m2_total_conf,
+                        "Área Total em metros lineares (Bobinas)": area_total_bobinas,
+                        "Final Total (R$)": round(valor_final_total, 2) 
                     })
                 # Fim da nova lógica de exportação
 
