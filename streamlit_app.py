@@ -16,7 +16,6 @@ def init_db():
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     
-    # 1. Cria ou verifica a tabela orcamentos (com a nova coluna preco_m2)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS orcamentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,20 +34,15 @@ def init_db():
         )
     """)
     
-    # 2. Migração de Schema: Adiciona a coluna preco_m2 se ela não existir
+    # Migração de Schema (mantida para segurança)
     try:
         cur.execute("SELECT preco_m2 FROM orcamentos LIMIT 1")
     except sqlite3.OperationalError:
         try:
-             # Tenta adicionar 'preco_m2_base' se 'preco_m2' deu erro (assumindo que 'preco_m2' era a coluna antiga)
-            cur.execute("ALTER TABLE orcamentos ADD COLUMN preco_m2_base REAL")
-            print("Migração de DB: Coluna 'preco_m2_base' adicionada à tabela 'orcamentos'.")
+            cur.execute("ALTER TABLE orcamentos ADD COLUMN preco_m2 REAL")
         except sqlite3.OperationalError:
-            # Se 'preco_m2_base' já existir ou outra coisa der errado, ignora a migração.
             pass
 
-
-    # 3. Criação de tabelas secundárias
     cur.execute("""
         CREATE TABLE IF NOT EXISTS itens_confeccionados (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,6 +72,9 @@ def init_db():
     conn.commit()
     conn.close()
 
+# ============================
+# Função corrigida: salvar_orcamento
+# ============================
 def salvar_orcamento(cliente, vendedor, itens_confeccionados, itens_bobinas, observacao, preco_m2):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
@@ -235,7 +232,7 @@ def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
         return m_total, valor_bruto, valor_ipi, valor_final, ipi_rate_to_use
 
 # ============================
-# Função para gerar PDF
+# Função corrigida: gerar_pdf
 # ============================
 def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_conf, resumo_bob, observacao, preco_m2, tipo_cliente="", estado=""):
     pdf = FPDF()
@@ -243,10 +240,8 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.set_font("Arial", "B", 14)
 
-    # Cabeçalho principal
     pdf.cell(0, 12, "Orçamento - Grupo Locomotiva", ln=True, align="C")
     
-    # Inclusão do ID do Orçamento
     if orcamento_id:
         pdf.set_font("Arial", "B", 11)
         pdf.cell(0, 6, f"ID do Orçamento: {orcamento_id}", ln=True, align="C")
@@ -258,7 +253,6 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
     pdf.cell(0, 6, "Validade da Cotação: 7 dias.", ln=True, align="L")
     pdf.ln(4)
 
-    # Dados do Cliente
     pdf.set_font("Arial", "B", 11)
     pdf.cell(0, 6, "Cliente", ln=True)
     pdf.set_font("Arial", size=10)
@@ -363,14 +357,7 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
         pdf.multi_cell(largura_util, 8, vendedor_txt)
         pdf.ln(5)
 
-    # Retorna bytes do PDF
-    # CORREÇÃO FINAL: Usa BytesIO para garantir um objeto de bytes válido para o Streamlit,
-    # eliminando o erro de tipo de dado.
-    pdf_output_buffer = BytesIO()
-    pdf.output(dest='F', name=pdf_output_buffer)
-    pdf_bytes = pdf_output_buffer.getvalue()
-    pdf_output_buffer.close()
-    
+    pdf_bytes = pdf.output(dest='S').encode('latin1')
     return pdf_bytes
 
 # ============================
