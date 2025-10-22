@@ -688,7 +688,6 @@ if menu == "Novo Orçamento":
                 'cor': "",
                 'preco_unitario': st.session_state.get("preco_m2", 0.0)
                     }
-            }
             if espessura_bobina is not None:
                 item_bobina['espessura'] = float(espessura_bobina)
                 item_bobina['preco_unitario'] = preco_m2
