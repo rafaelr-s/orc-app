@@ -685,7 +685,9 @@ if menu == "Novo Orçamento":
                 'comprimento': float(comprimento),
                 'largura': float(largura_bobina),
                 'quantidade': int(quantidade),
-                'cor': ""
+                'cor': "",
+                'preco_unitario': st.session_state.get("preco_m2", 0.0)
+                    }
             }
             if espessura_bobina is not None:
                 item_bobina['espessura'] = float(espessura_bobina)
