@@ -564,7 +564,7 @@ if menu == "Novo Orçamento":
         "Vitro 0,50","Vitro 0,60","Vitro 0,80","Vitro 1,00","Durasol","Poli Light",
         "Sunset","Tenda","Tenda 2,3x2,3","Acrylic","Agora","Lona Galpão Teto",
         "Lona Galpão Lateral","Tela de Sombreamento 30%","Tela de Sombreamento 50%",
-        "Tela de Sombreamento 80%","Geomembrana RV 0,42","Geomembrana RV 0,80",
+        "Tela de Sombreamento 80%", "Tela de Sobreamento 95%","Geomembrana RV 0,42","Geomembrana RV 0,80",
         "Geomembrana RV 1,00","Geomembrana ATX 0,80","Geomembrana ATX 1,00",
         "Geomembrana ATX 1,50","Geo Bio s/ reforço 1,00","Geo Bio s/ reforço 1,20",
         "Geo Bio s/ reforço 1,50","Geo Bio c/ reforço 1,20","Cristal com Pó",
