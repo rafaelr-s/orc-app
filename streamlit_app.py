@@ -7,6 +7,13 @@ import sqlite3
 import pandas as pd
 from io import BytesIO
 
+try:
+    LOGO_PATH ="LOCOMOTIVA.JPG"
+    pass # Manteremos como um path string para a FPDF tentar carregar
+except Exception as e:
+    st.error(f"Erro ao carregar a imagem do logo: {e}") 
+    LOGO_PATH = None
+
 # ============================
 # Banco SQLite
 # ============================
@@ -34,7 +41,7 @@ def init_db():
         )
     """)
     
-    # Migração de Schema (mantida para segurança)
+    # Migração de Schema para preco_m2 (mantida para segurança)
     try:
         cur.execute("SELECT preco_m2 FROM orcamentos LIMIT 1")
     except sqlite3.OperationalError:
@@ -43,6 +50,15 @@ def init_db():
         except sqlite3.OperationalError:
             pass
 
+    # >>> CORREÇÃO 1: Migração para garantir a coluna 'observacao'
+    try:
+        cur.execute("SELECT observacao FROM orcamentos LIMIT 1")
+    except sqlite3.OperationalError:
+        try:
+            cur.execute("ALTER TABLE orcamentos ADD COLUMN observacao TEXT")
+        except sqlite3.OperationalError:
+            pass
+            
     cur.execute("""
         CREATE TABLE IF NOT EXISTS itens_confeccionados (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,7 +89,7 @@ def init_db():
     conn.close()
 
 # ============================
-# Função corrigida: salvar_orcamento
+# Função corrigida: salvar_orcamento (Sem Alteração)
 # ============================
 def salvar_orcamento(cliente, vendedor, itens_confeccionados, itens_bobinas, observacao, preco_m2):
     conn = sqlite3.connect(DB_NAME)
@@ -122,13 +138,16 @@ def buscar_orcamentos():
     conn.close()
     return rows
 
+# ============================
+# Função corrigida: carregar_orcamento_por_id
+# ============================
 def carregar_orcamento_por_id(orcamento_id):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
-    # Adicionando 'preco_m2_base' aqui para corresponder à migração e ao uso no histórico. 
-    # O `preco_m2` do CREATE TABLE (linha 30) será ignorado.
-    orc_cols = ['id','data_hora','cliente_nome','cliente_cnpj','tipo_cliente','estado','frete','tipo_pedido','vendedor_nome','vendedor_tel','vendedor_email','observacao', 'preco_m2_base']
-    # Buscando todas as colunas, assumindo que `preco_m2_base` é a última, como no excel/reabrir
+    # >>> CORREÇÃO 2: Renomeia a coluna mapeada para 'preco_base_utilizado' para melhor semântica.
+    # A ordem dos campos em 'orc_cols' deve corresponder à ordem no CREATE TABLE (SELECT *)
+    orc_cols = ['id','data_hora','cliente_nome','cliente_cnpj','tipo_cliente','estado','frete','tipo_pedido','vendedor_nome','vendedor_tel','vendedor_email','observacao', 'preco_base_utilizado']
+    # Buscando todas as colunas
     cur.execute("SELECT * FROM orcamentos WHERE id=?", (orcamento_id,))
     orc = cur.fetchone()
     cur.execute("SELECT produto, comprimento, largura, quantidade, cor FROM itens_confeccionados WHERE orcamento_id=?", (orcamento_id,))
@@ -148,7 +167,7 @@ def _format_brl(v):
         return f"R$ {v}"
 
 # ============================
-# Cálculos
+# Cálculos (Sem Alteração)
 # ============================
 st_por_estado = {} 
 
@@ -198,7 +217,7 @@ def calcular_valores_confeccionados(itens, preco_m2, tipo_cliente="", estado="",
 
     return m2_total, valor_bruto, valor_ipi, valor_final, valor_st, aliquota_st
     
-# FUNÇÃO CORRIGIDA PARA IPI DE CAPOTA MARÍTIMA
+# FUNÇÃO CORRIGIDA PARA IPI DE CAPOTA MARÍTIMA (Sem Alteração)
 def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
     IPI_RATE_DEFAULT = 0.0975 # 9.75%
     
@@ -232,7 +251,7 @@ def calcular_valores_bobinas(itens, preco_m2, tipo_pedido="Direta"):
         return m_total, valor_bruto, valor_ipi, valor_final, ipi_rate_to_use
 
 # ============================
-# Função corrigida: gerar_pdf
+# Função corrigida: gerar_pdf (Sem Alteração)
 # ============================
 def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobinas, resumo_conf, resumo_bob, observacao, preco_m2, tipo_cliente="", estado=""):
     pdf = FPDF()
@@ -240,8 +259,26 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.set_font("Arial", "B", 14)
 
-    pdf.cell(0, 12, "Orçamento - Grupo Locomotiva", ln=True, align="C")
-    
+    # 1. INSERIR LOGO NO TOPO
+    if LOGO_PATH:
+        largura_da_imagem_no_pdf = 30 
+        posicao_x = 88 
+        posicao_y = 5 
+        
+        pdf.image(LOGO_PATH, x=posicao_x, y=posicao_y, w=largura_da_imagem_no_pdf, h=0) 
+        
+        pdf.set_y(posicao_y + 20) 
+        
+        pdf.set_font("Arial", "B", 14)
+        pdf.set_x(posicao_x + largura_da_imagem_no_pdf - 52) 
+        pdf.cell(0, 12, "Orçamento - Grupo Locomotiva", ln=True, align="L")
+        
+    else:
+        # O BLOCO ABAIXO PRECISA ESTAR INDENTADO COM 4 ESPAÇOS
+        pdf.set_font("Arial", "B", 14)
+        pdf.cell(0, 12, "Orçamento - Grupo Locomotiva", ln=True, align="C") # Linha 270
+        
+
     if orcamento_id:
         pdf.set_font("Arial", "B", 11)
         pdf.cell(0, 6, f"ID do Orçamento: {orcamento_id}", ln=True, align="C")
@@ -343,6 +380,7 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
         pdf.set_font("Arial", "B", 11)
         pdf.cell(0, 11, "Observações", ln=True)
         pdf.set_font("Arial", size=10)
+        # Usa multi_cell para texto longo
         pdf.multi_cell(largura_util, 10, str(observacao))
         pdf.ln(10)
 
@@ -361,7 +399,7 @@ def gerar_pdf(orcamento_id, cliente, vendedor, itens_confeccionados, itens_bobin
     return pdf_bytes
 
 # ============================
-# Funções de Reset
+# Funções de Reset (Sem Alteração)
 # ============================
 
 def reset_novo_orcamento_state():
@@ -410,7 +448,7 @@ def reset_historico_filters():
     # O Streamlit faz o rerun automaticamente após a função on_click.
 
 # ============================
-# Constantes de Vendedores
+# Constantes de Vendedores (Sem Alteração)
 # ============================
 VENDEDORES = {
     "Selecione um Vendedor": {"nome": "", "tel": "", "email": ""},
@@ -419,7 +457,7 @@ VENDEDORES = {
 }
 VENDEDORES_NOMES = list(VENDEDORES.keys())
 
-# Função para atualizar o Session State baseado na seleção
+# Função para atualizar o Session State baseado na seleção (Sem Alteração)
 def update_vendedor_details():
     selected_name = st.session_state["vendedor_select"]
     details = VENDEDORES.get(selected_name, {"nome": selected_name, "tel": "", "email": ""})
@@ -428,7 +466,7 @@ def update_vendedor_details():
     st.session_state["vend_email"] = details["email"]
 
 # ============================
-# Funções de Resumo para Exportação Excel
+# Funções de Resumo para Exportação Excel (Sem Alteração)
 # ============================
 def get_order_summary_info(confecc, bob):
     # confecc: (produto, comprimento, largura, quantidade, cor)
@@ -467,7 +505,7 @@ def get_order_summary_info(confecc, bob):
     return tipo_item, most_selected_product, m2_total_conf
 
 # ============================
-# Inicialização
+# Inicialização (Sem Alteração)
 # ============================
 init_db()
 
@@ -489,7 +527,7 @@ for k, v in defaults.items():
         st.session_state[k] = v
 
 # ============================
-# Configuração Streamlit
+# Configuração Streamlit (Sem Alteração)
 # ============================
 st.set_page_config(page_title="Calculadora Grupo Locomotiva", page_icon="📏", layout="centered")
 st.title("Orçamento - Grupo Locomotiva")
@@ -507,7 +545,7 @@ if menu != menu_options[st.session_state['menu_index']]:
     st.session_state['menu_index'] = menu_options.index(menu)
 
 # ============================
-# Tabelas de ICMS e ST
+# Tabelas de ICMS e ST (Sem Alteração)
 # ============================
 icms_por_estado = {
     "SP": 18, "MG": 12, "PR": 12, "RJ": 12, "RS": 12, "SC": 12
@@ -530,7 +568,7 @@ st_por_estado.update({
 })
 
 # ============================
-# Interface - Novo Orçamento
+# Interface - Novo Orçamento (Sem Alteração na Lógica de Estado)
 # ============================
 if menu == "Novo Orçamento":
     # Botão de Limpar Formulário (Novo)
@@ -905,18 +943,19 @@ if menu == "Histórico de Orçamentos":
         if not orcamentos_filtrados:
             st.warning("Nenhum orçamento encontrado com os filtros selecionados.")
         else:
-            # Exportar Excel (NOVA LÓGICA - REQ. 2)
+            # Exportar Excel (LÓGICA CORRIGIDA - REQ. 2/3)
             if st.button("📊 Exportar Excel do Histórico Filtrado"):
                 linhas_excel = []
-                # Colunas para carregar dados do orcamento
-                orc_cols = ['id','data_hora','cliente_nome','cliente_cnpj','tipo_cliente','estado','frete','tipo_pedido','vendedor_nome','vendedor_tel','vendedor_email','observacao', 'preco_m2_base']
+                # Colunas para carregar dados do orcamento (com o nome atualizado)
+                orc_cols = ['id','data_hora','cliente_nome','cliente_cnpj','tipo_cliente','estado','frete','tipo_pedido','vendedor_nome','vendedor_tel','vendedor_email','observacao', 'preco_base_utilizado']
 
                 for o in orcamentos_filtrados:
                     orc_id, data_hora, cliente_nome, cliente_cnpj, vendedor_nome = o
                     orc, confecc, bob = carregar_orcamento_por_id(orc_id)
                     
                     orc_data = dict(zip(orc_cols, orc))
-                    preco_m2_base = orc_data.get('preco_m2_base') if orc_data.get('preco_m2_base') is not None else 0.0
+                    # Usando o novo nome da coluna
+                    preco_m2_base = orc_data.get('preco_base_utilizado') if orc_data.get('preco_base_utilizado') is not None else 0.0
 
                     # 1. Obter info de resumo (Tipo de Item, Produto Mais Selecionado, Área Total Conf.)
                     # confecc/bob são listas de tuplas (ex: (produto, comprimento, largura, quantidade, cor))
@@ -952,12 +991,13 @@ if menu == "Histórico de Orçamentos":
                         "Tipo do Pedido": orc_data['tipo_pedido'],
                         "Produto Mais Selecionado": produto_mais_sel, 
                         "Tipo do Item": tipo_item,
-                        "Preço Base Utilizado (R$)": preco_m2_base,
+                        "Preço Base Utilizado (R$)": preco_m2_base, # CORRIGIDO: Nome da coluna no Excel
                         "Área Total em m² (Confeccionado)": m2_total_conf,
                         "Área Total em metros lineares (Bobinas)": area_total_bobinas,
+                        "Observações": orc_data['observacao'] or "", # CORRIGIDO: Inclusão das Observações
                         "Final Total (R$)": round(valor_final_total, 2) 
                     })
-                # Fim da nova lógica de exportação
+                # Fim da lógica de exportação
 
                 df_excel = pd.DataFrame(linhas_excel)
                 excel_bytes = BytesIO()
@@ -974,17 +1014,22 @@ if menu == "Histórico de Orçamentos":
                 orc_id, data_hora, cliente_nome, cliente_cnpj, vendedor_nome = o
                 orc, confecc, bob = carregar_orcamento_por_id(orc_id)
                 
-                orc_cols = ['id','data_hora','cliente_nome','cliente_cnpj','tipo_cliente','estado','frete','tipo_pedido','vendedor_nome','vendedor_tel','vendedor_email','observacao', 'preco_m2_base']
+                # CORREÇÃO 2: Atualiza a lista aqui também
+                orc_cols = ['id','data_hora','cliente_nome','cliente_cnpj','tipo_cliente','estado','frete','tipo_pedido','vendedor_nome','vendedor_tel','vendedor_email','observacao', 'preco_base_utilizado']
                 orc_data = dict(zip(orc_cols, orc))
                 
                 # CORREÇÃO 2: Definição da variável preco_m2_base para uso nas colunas
-                preco_m2_base = orc_data.get('preco_m2_base') if orc_data.get('preco_m2_base') is not None else 0.0
+                preco_m2_base = orc_data.get('preco_base_utilizado') if orc_data.get('preco_base_utilizado') is not None else 0.0
 
                 with st.expander(f"📝 ID {orc_id} - {cliente_nome} ({data_hora})"):
                     st.markdown(f"**Cliente:** {cliente_nome}")
                     st.markdown(f"**CNPJ:** {cliente_cnpj}")
                     st.markdown(f"**Vendedor:** {vendedor_nome}")
+                    # CORREÇÃO 2/B: Exibe o Preço Base Utilizado
                     st.markdown(f"**Preço Base Utilizado (💵):** {_format_brl(preco_m2_base)}") 
+                    # CORREÇÃO 4: Exibe as Observações
+                    if orc_data['observacao']:
+                        st.markdown(f"**Observações:** {orc_data['observacao']}")
 
                     if confecc:
                         st.markdown("### ⬛ Itens Confeccionados")
@@ -1025,8 +1070,8 @@ if menu == "Histórico de Orçamentos":
                                 "vend_nome": orc[8] or "",
                                 "vend_tel": orc[9] or "",
                                 "vend_email": orc[10] or "",
-                                "obs": orc[11] or "",
-                                "preco_m2": preco_m2_base, 
+                                "obs": orc[11] or "", # O índice 11 é a 'observacao'
+                                "preco_m2": preco_m2_base, # O índice 12 é o 'preco_m2'
                                 "produto_sel": primeiro_produto if primeiro_produto else " ", 
                                 "itens_confeccionados": [dict(zip(['produto','comprimento','largura','quantidade','cor'],c)) for c in confecc],
                                 "bobinas_adicionadas": [dict(zip(['produto','comprimento','largura','quantidade','cor','espessura','preco_unitario'],b)) for b in bob],
